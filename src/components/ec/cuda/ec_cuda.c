@@ -123,6 +123,7 @@ static ucc_status_t ucc_ec_cuda_init(const ucc_ec_params_t *ec_params)
     ucc_ec_cuda_set_threads_nbr(&cfg->reduce_num_threads,
                                 prop.maxThreadsPerBlock);
 
+    printf("CUDA_VERSION: %d\n", CUDA_VERSION);
     if (cfg->reduce_num_blocks != UCC_ULUNITS_AUTO) {
         if (prop.maxGridSize[0] < cfg->reduce_num_blocks) {
             ec_warn(&ucc_ec_cuda.super,
@@ -149,6 +150,8 @@ static ucc_status_t ucc_ec_cuda_init(const ucc_ec_params_t *ec_params)
         CUdevice cu_dev;
         int attr;
         cu_st = cuCtxGetDevice(&cu_dev);
+        printf("we have a ctx: \n");
+        printf(cu_st);
         if (cu_st != CUDA_SUCCESS){
             const char *cu_err_st_str;
             cuGetErrorString(cu_st, &cu_err_st_str);
