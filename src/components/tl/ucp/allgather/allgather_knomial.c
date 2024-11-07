@@ -60,13 +60,19 @@ void ucc_tl_ucp_allgather_knomial_progress(ucc_coll_task_t *coll_task)
     ucc_status_t           status;
     size_t                 extra_count;
 
+    ucc_debug("task : %p, rank : %p, head_of_linked_list : %p \n, send_posted : %d, send_completed : %d, recv_posted : %d, recv_completed : %d \n start of progress", 
+              task, rank, task->allgather_kn.etask_linked_list_head, task->tagged.send_posted, task->tagged.send_completed, task->tagged.recv_posted, task->tagged.recv_completed);
     EXEC_TASK_TEST(UCC_KN_PHASE_INIT, "failed during ee task test",
                    task->allgather_kn.etask);
     task->allgather_kn.etask = NULL;
     UCC_KN_GOTO_PHASE(task->allgather_kn.phase);
     if (KN_NODE_EXTRA == node_type) {
+        ucc_debug("task : %p, rank : %p, head_of_linked_list : %p \n, send_posted : %d, send_completed : %d, recv_posted : %d, recv_completed : %d \n inside KN_NODE_EXTRA", 
+              task, rank, task->allgather_kn.etask_linked_list_head, task->tagged.send_posted, task->tagged.send_completed, task->tagged.recv_posted, task->tagged.recv_completed);
         peer = ucc_knomial_pattern_get_proxy(p, rank);
         if (p->type != KN_PATTERN_ALLGATHERX) {
+            ucc_debug("task : %p, rank : %p, head_of_linked_list : %p \n, send_posted : %d, send_completed : %d, recv_posted : %d, recv_completed : %d \n inside KN_PATTERN_ALLGATHERX", 
+              task, rank, task->allgather_kn.etask_linked_list_head, task->tagged.send_posted, task->tagged.send_completed, task->tagged.recv_posted, task->tagged.recv_completed);
             UCPCHECK_GOTO(ucc_tl_ucp_send_nb_with_mem(task->allgather_kn.sbuf,
                                              local * dt_size, mem_type,
                                              ucc_ep_map_eval(task->subset.map,
@@ -83,7 +89,11 @@ void ucc_tl_ucp_allgather_knomial_progress(ucc_coll_task_t *coll_task)
                       task, out);
         ucc_assert(task->allgather_kn.count_mh-1 <= task->allgather_kn.max_mh);
     }
+    ucc_debug("task : %p, rank : %p, head_of_linked_list : %p \n, send_posted : %d, send_completed : %d, recv_posted : %d, recv_completed : %d \n after KN_NODE_EXTRA", 
+              task, rank, task->allgather_kn.etask_linked_list_head, task->tagged.send_posted, task->tagged.send_completed, task->tagged.recv_posted, task->tagged.recv_completed);
     if ((p->type != KN_PATTERN_ALLGATHERX) && (node_type == KN_NODE_PROXY)) {
+        ucc_debug("task : %p, rank : %p, head_of_linked_list : %p \n, send_posted : %d, send_completed : %d, recv_posted : %d, recv_completed : %d \n inside not KN_PATTERN_ALLGATHERX and KN_NODE_PROXY", 
+              task, rank, task->allgather_kn.etask_linked_list_head, task->tagged.send_posted, task->tagged.send_completed, task->tagged.recv_posted, task->tagged.recv_completed);
         peer = ucc_knomial_pattern_get_extra(p, rank);
         extra_count = GET_LOCAL_COUNT(args, size, peer);
         peer = ucc_ep_map_eval(task->subset.map, peer);
@@ -96,7 +106,11 @@ void ucc_tl_ucp_allgather_knomial_progress(ucc_coll_task_t *coll_task)
 
 UCC_KN_PHASE_EXTRA:
     if ((KN_NODE_EXTRA == node_type) || (KN_NODE_PROXY == node_type)) {
+        ucc_debug("task : %p, rank : %p, head_of_linked_list : %p \n, send_posted : %d, send_completed : %d, recv_posted : %d, recv_completed : %d \n inside KN_NODE_EXTRA or KN_NODE_PROXY", 
+              task, rank, task->allgather_kn.etask_linked_list_head, task->tagged.send_posted, task->tagged.send_completed, task->tagged.recv_posted, task->tagged.recv_completed);
         if (UCC_INPROGRESS == ucc_tl_ucp_test_with_etasks(task)) {
+            ucc_debug("task : %p, rank : %p, head_of_linked_list : %p \n, send_posted : %d, send_completed : %d, recv_posted : %d, recv_completed : %d \n still in progress", 
+              task, rank, task->allgather_kn.etask_linked_list_head, task->tagged.send_posted, task->tagged.send_completed, task->tagged.recv_posted, task->tagged.recv_completed);
             SAVE_STATE(UCC_KN_PHASE_EXTRA);
             return;
         }
@@ -105,11 +119,15 @@ UCC_KN_PHASE_EXTRA:
         }
     }
     while (!ucc_knomial_pattern_loop_done(p)) {
+        ucc_debug("task : %p, rank : %p, head_of_linked_list : %p \n, send_posted : %d, send_completed : %d, recv_posted : %d, recv_completed : %d \n in while loop ucc_knomial_pattern_loop_done",
+              task, rank, task->allgather_kn.etask_linked_list_head, task->tagged.send_posted, task->tagged.send_completed, task->tagged.recv_posted, task->tagged.recv_completed);
         ucc_kn_ag_pattern_peer_seg(rank, p, &local_seg_count,
                                    &local_seg_offset);
         sbuf = PTR_OFFSET(rbuf, local_seg_offset * dt_size);
 
         for (loop_step = radix - 1; loop_step > 0; loop_step--) {
+            ucc_debug("task : %p, rank : %p, head_of_linked_list : %p \n, send_posted : %d, send_completed : %d, recv_posted : %d, recv_completed : %d \n inside backward for loop",
+              task, rank, task->allgather_kn.etask_linked_list_head, task->tagged.send_posted, task->tagged.send_completed, task->tagged.recv_posted, task->tagged.recv_completed);
             peer = ucc_knomial_pattern_get_loop_peer(p, rank, loop_step);
             if (peer == UCC_KN_PEER_NULL)
                 continue;
@@ -130,6 +148,8 @@ UCC_KN_PHASE_EXTRA:
         }
 
         for (loop_step = 1; loop_step < radix; loop_step++) {
+            ucc_debug("task : %p, rank : %p, head_of_linked_list : %p \n, send_posted : %d, send_completed : %d, recv_posted : %d, recv_completed : %d \n inside forward for loop",
+              task, rank, task->allgather_kn.etask_linked_list_head, task->tagged.send_posted, task->tagged.send_completed, task->tagged.recv_posted, task->tagged.recv_completed);
             peer = ucc_knomial_pattern_get_loop_peer(p, rank, loop_step);
             if (peer == UCC_KN_PEER_NULL)
                 continue;
@@ -154,6 +174,8 @@ UCC_KN_PHASE_EXTRA:
         }
     UCC_KN_PHASE_LOOP:
         if (UCC_INPROGRESS == ucc_tl_ucp_test_recv_with_etasks(task)) {
+            ucc_debug("task : %p, rank : %p, head_of_linked_list : %p \n, send_posted : %d, send_completed : %d, recv_posted : %d, recv_completed : %d \n still in progress (2)",
+              task, rank, task->allgather_kn.etask_linked_list_head, task->tagged.send_posted, task->tagged.send_completed, task->tagged.recv_posted, task->tagged.recv_completed);
             SAVE_STATE(UCC_KN_PHASE_LOOP);
             return;
         }
@@ -172,11 +194,15 @@ UCC_KN_PHASE_EXTRA:
     }
 UCC_KN_PHASE_PROXY:
     if (UCC_INPROGRESS == ucc_tl_ucp_test_with_etasks(task)) {
+        ucc_debug("task : %p, rank : %p, head_of_linked_list : %p \n, send_posted : %d, send_completed : %d, recv_posted : %d, recv_completed : %d \n inside KN_NODE_EXTRA",
+              task, rank, task->allgather_kn.etask_linked_list_head, task->tagged.send_posted, task->tagged.send_completed, task->tagged.recv_posted, task->tagged.recv_completed);
+        printf("still in progress (3)")
         SAVE_STATE(UCC_KN_PHASE_PROXY);
         return;
     }
 
 out:
+    printf("in the out phase")
     ucc_assert(task->allgather_kn.count_mh-1 == task->allgather_kn.max_mh);
     ucc_assert(UCC_TL_UCP_TASK_P2P_COMPLETE(task));
     task->super.status = UCC_OK;
@@ -201,6 +227,8 @@ ucc_status_t ucc_tl_ucp_allgather_knomial_start(ucc_coll_task_t *coll_task)
     ptrdiff_t          offset;
     ucc_ee_executor_t *exec;
 
+    ucc_debug("task : %p, rank : %p, head_of_linked_list : %p \n, send_posted : %d, send_completed : %d, recv_posted : %d, recv_completed : %d \n in the start function",
+              task, rank, task->allgather_kn.etask_linked_list_head, task->tagged.send_posted, task->tagged.send_completed, task->tagged.recv_posted, task->tagged.recv_completed);
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task, "ucp_allgather_kn_start", 0);
     ucc_tl_ucp_task_reset(task, UCC_INPROGRESS);
     task->allgather_kn.etask = NULL;
