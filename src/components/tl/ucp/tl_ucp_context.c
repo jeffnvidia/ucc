@@ -137,6 +137,7 @@ static int memcpy_device_start(void *dest, void *src, size_t size,
                                 void *completion, void *user_data) {
         
         ucc_info("using memcpy_device_start");
+        printf("printf : using memcpy_device_start");
         ucc_status_t status;
         ucc_ee_executor_task_args_t eargs;
         ucc_ee_executor_t *exec;
@@ -174,6 +175,7 @@ static int memcpy_device_start(void *dest, void *src, size_t size,
 static int memcpy_device(void *dest, void *src, size_t size, void *user_data){
 
     ucc_info("using memcpy_device");
+    printf("printf : using memcpy_device");
     ucc_status_t status;
     ucc_ee_executor_task_args_t eargs;
     ucc_ee_executor_t *exec;
