@@ -57,9 +57,10 @@ void ucc_tl_ucp_team_default_score_str_free(
     }                                                                          \
 } while(0)
 
-#define MEM_MAP() do {                                                              \
+#define MEM_MAP(index) do {                                                              \
     status = ucs_status_to_ucc_status(ucp_mem_map(ctx->worker.ucp_context, &mmap_params, &mh_list[count_mh++]));               \
     if (UCC_OK != status) {                                                         \
+        tl_error(UCC_TASK_LIB(task), "mem_map failed : %s, length : %ld, mmap_params.address : %p", index, mmap_params.length, mmap_params.address);     \
         return status;                                                                     \
     }                                                                               \
     if (count_mh == size_of_list){                                                  \

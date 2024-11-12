@@ -260,8 +260,10 @@ ucc_status_t register_memory(ucc_coll_task_t *coll_task){
     size_t                 dt_size   = ucc_dt_size(args->dst.info.datatype);
     size_t                 data_size = count * dt_size;
     ucc_rank_t             size      = task->subset.map.ep_num;
+    ucc_info("size : %d", size);
     ucc_rank_t             broot     = args->coll_type == UCC_COLL_TYPE_BCAST ?
                                        args->root : 0;
+    ucc_info("coll_type : %d", args->coll_type);
     ucc_rank_t             rank      = VRANK(task->subset.myrank, broot, size);
     size_t                 local     = GET_LOCAL_COUNT(args, size, rank);
     void                  *sbuf;
@@ -278,6 +280,12 @@ ucc_status_t register_memory(ucc_coll_task_t *coll_task){
     int                    size_of_list = 1;
     int                    count_mh = 0;
     ucp_mem_h             *mh_list = (ucp_mem_h *)malloc(size_of_list * sizeof(ucp_mem_h));
+
+    ptrdiff_t          offset;
+    offset = ucc_sra_kn_get_offset(count,
+                                    dt_size, rank,
+                                    size, radix);
+    task->allgather_kn.sbuf = PTR_OFFSET(args->dst.info.buffer, offset);
 
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task, "ucp_allgather_kn_start", 0);
     task->allgather_kn.etask = NULL;
@@ -296,23 +304,25 @@ ucc_status_t register_memory(ucc_coll_task_t *coll_task){
     mmap_params.memory_type = ucc_memtype_to_ucs[mem_type];
     if (KN_NODE_EXTRA == node_type) {
         if (p->type != KN_PATTERN_ALLGATHERX) {
+            ucc_info("1 : extra node");
             mmap_params.address     = task->allgather_kn.sbuf;
             mmap_params.length      = local * dt_size;
-            MEM_MAP();
+            MEM_MAP("1");
         }
         
         mmap_params.address     = rbuf;
         mmap_params.length      = data_size;
-        MEM_MAP();
+        MEM_MAP("2");
     }
     if ((p->type != KN_PATTERN_ALLGATHERX) && (node_type == KN_NODE_PROXY)) {
+        ucc_info("2 : inside proxy");
         peer = ucc_knomial_pattern_get_extra(p, rank);
         extra_count = GET_LOCAL_COUNT(args, size, peer);
         peer = ucc_ep_map_eval(task->subset.map, peer);
         mmap_params.address     = PTR_OFFSET(task->allgather_kn.sbuf,
                                         local * dt_size);
         mmap_params.length      = extra_count * dt_size;
-        MEM_MAP();
+        MEM_MAP("3");
     }
 
     if (KN_NODE_EXTRA == node_type) {
@@ -335,7 +345,7 @@ ucc_status_t register_memory(ucc_coll_task_t *coll_task){
             }
             mmap_params.address     = sbuf;
             mmap_params.length      = local_seg_count * dt_size;
-            MEM_MAP();
+            MEM_MAP("4");
         }
 
         for (loop_step = 1; loop_step < radix; loop_step++) {
@@ -354,15 +364,16 @@ ucc_status_t register_memory(ucc_coll_task_t *coll_task){
             }
             mmap_params.address     = PTR_OFFSET(rbuf, peer_seg_offset * dt_size);
             mmap_params.length      = peer_seg_count * dt_size;
-            MEM_MAP();
+            MEM_MAP("5");
         }
         ucc_kn_ag_pattern_next_iter(p);
     }
 
     if (KN_NODE_PROXY == node_type) {
+        ucc_info("3 : proxy");
         mmap_params.address     = args->dst.info.buffer;
         mmap_params.length      = data_size;
-        MEM_MAP();
+        MEM_MAP("6");
     }
 
 out:
@@ -388,6 +399,7 @@ ucc_status_t  ucc_tl_ucp_allgather_knomial_finalize(ucc_coll_task_t *coll_task){
     if (status < 0){
         tl_error(UCC_TASK_LIB(task),
                  "failed to initialize ucc_mpool");
+        return status;
     }
 
     return UCC_OK;
@@ -409,6 +421,7 @@ ucc_status_t ucc_tl_ucp_allgather_knomial_init_r(
     if (status < 0){
         tl_error(UCC_TASK_LIB(task),
                  "failed to initialize ucc_mpool");
+        return status;
     }
     
     if (tl_team->cfg.use_reordering &&
@@ -427,6 +440,7 @@ ucc_status_t ucc_tl_ucp_allgather_knomial_init_r(
     if (status < 0){
         tl_error(UCC_TASK_LIB(task),
                  "failed to register memory");
+        return status;
     }
     *task_h                    = &task->super;
     return UCC_OK;
