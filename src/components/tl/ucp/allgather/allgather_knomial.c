@@ -277,7 +277,6 @@ ucc_status_t register_memory(ucc_coll_task_t *coll_task){
     ucp_mem_h             *mh_list = (ucp_mem_h *)malloc(size_of_list * sizeof(ucp_mem_h));
 
     ptrdiff_t          offset;
-
     if (ct == UCC_COLL_TYPE_ALLGATHER) {
         ucc_kn_ag_pattern_init(size, rank, radix, args->dst.info.count,
                                &task->allgather_kn.p);
