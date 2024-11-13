@@ -404,8 +404,8 @@ ucc_status_t ucc_tl_ucp_allgather_knomial_init_r(
     ucc_tl_ucp_task_t *task;
     ucc_sbgp_t        *sbgp;
     ucc_status_t       status;
-    ucc_info("start of all_gatherknomial with ucc_info");
-    printf("test of printf");
+    // ucc_info("start of all_gatherknomial with ucc_info");
+    // printf("test of printf");
     task = ucc_tl_ucp_init_task(coll_args, team);
     status = ucc_mpool_init(&task->allgather_kn.etask_node_mpool, 0, sizeof(node_ucc_ee_executor_task_t),
                             0, UCC_CACHE_LINE_SIZE, 16, UINT_MAX, NULL,
