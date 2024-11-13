@@ -65,6 +65,7 @@ void ucc_tl_ucp_allgather_knomial_progress(ucc_coll_task_t *coll_task)
     task->allgather_kn.etask = NULL;
     UCC_KN_GOTO_PHASE(task->allgather_kn.phase);
     if (KN_NODE_EXTRA == node_type) {
+        ucc_info("progress : extra");
         peer = ucc_knomial_pattern_get_proxy(p, rank);
         if (p->type != KN_PATTERN_ALLGATHERX) {
             UCPCHECK_GOTO(ucc_tl_ucp_send_nb_with_mem(task->allgather_kn.sbuf,
@@ -84,6 +85,7 @@ void ucc_tl_ucp_allgather_knomial_progress(ucc_coll_task_t *coll_task)
         ucc_assert(task->allgather_kn.count_mh-1 <= task->allgather_kn.max_mh);
     }
     if ((p->type != KN_PATTERN_ALLGATHERX) && (node_type == KN_NODE_PROXY)) {
+        ucc_info("progress : proxy");
         peer = ucc_knomial_pattern_get_extra(p, rank);
         extra_count = GET_LOCAL_COUNT(args, size, peer);
         peer = ucc_ep_map_eval(task->subset.map, peer);
@@ -96,6 +98,7 @@ void ucc_tl_ucp_allgather_knomial_progress(ucc_coll_task_t *coll_task)
 
 UCC_KN_PHASE_EXTRA:
     if ((KN_NODE_EXTRA == node_type) || (KN_NODE_PROXY == node_type)) {
+        ucc_info("progress : extra or proxy (2)");
         if (UCC_INPROGRESS == ucc_tl_ucp_test_with_etasks(task)) {
             SAVE_STATE(UCC_KN_PHASE_EXTRA);
             return;
@@ -161,6 +164,7 @@ UCC_KN_PHASE_EXTRA:
     }
 
     if (KN_NODE_PROXY == node_type) {
+        ucc_info("progress : proxy (3)");
         peer = ucc_knomial_pattern_get_extra(p, rank);
         UCPCHECK_GOTO(ucc_tl_ucp_send_nb_with_mem(args->dst.info.buffer, data_size,
                                          mem_type,
@@ -260,11 +264,12 @@ ucc_status_t register_memory(ucc_coll_task_t *coll_task){
     size_t                 dt_size   = ucc_dt_size(args->dst.info.datatype);
     size_t                 data_size = count * dt_size;
     ucc_rank_t             size      = task->subset.map.ep_num;
-    ucc_info("size : %d", size);
+    // ucc_info("size : %d", size);
     ucc_rank_t             broot     = args->coll_type == UCC_COLL_TYPE_BCAST ?
                                        args->root : 0;
-    ucc_info("coll_type : %d", args->coll_type);
+    // ucc_info("coll_type : %d", args->coll_type);
     ucc_rank_t             rank      = VRANK(task->subset.myrank, broot, size);
+    ucc_info("rank : %d, node_type : %d", rank, node_type);
     size_t                 local     = GET_LOCAL_COUNT(args, size, rank);
     void                  *sbuf;
     ptrdiff_t              peer_seg_offset, local_seg_offset;
