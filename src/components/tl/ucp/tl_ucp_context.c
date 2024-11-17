@@ -137,12 +137,12 @@ static int memcpy_device_start(void *dest, void *src, size_t size,
                                 void *completion, void *user_data) {
         
         ucc_info("using memcpy_device_start");
-        printf("printf : using memcpy_device_start");
         ucc_status_t status;
         ucc_ee_executor_task_args_t eargs;
         ucc_ee_executor_t *exec;
         ucc_tl_ucp_task_t *task = (ucc_tl_ucp_task_t *) user_data;
 
+        ucc_info("memcpystart user data : %p", user_data);
         status = ucc_coll_task_get_executor(&task->super, &exec);
         if (ucc_unlikely(status != UCC_OK)) {
             return status;
@@ -175,13 +175,13 @@ static int memcpy_device_start(void *dest, void *src, size_t size,
 static int memcpy_device(void *dest, void *src, size_t size, void *user_data){
 
     ucc_info("using memcpy_device");
-    printf("printf : using memcpy_device");
     ucc_status_t status;
     ucc_ee_executor_task_args_t eargs;
     ucc_ee_executor_t *exec;
     ucc_ee_executor_task_t *etask;
     ucc_tl_ucp_task_t *task = (ucc_tl_ucp_task_t *) user_data;
 
+    ucc_info("memcpy user data : %p", user_data);
     status = ucc_coll_task_get_executor(&task->super, &exec);
     if (ucc_unlikely(status != UCC_OK)) {
         return status;
