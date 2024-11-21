@@ -177,6 +177,7 @@ typedef struct ucc_ee_executor_task {
     ucc_ee_executor_task_args_t  args;
     ucc_status_t                 status;
     void                        *completion;
+    int                          finished;
 } ucc_ee_executor_task_t;
 
 typedef struct node_ucc_ee_executor_task node_ucc_ee_executor_task_t;

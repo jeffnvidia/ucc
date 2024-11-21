@@ -144,8 +144,8 @@ static int memcpy_device_start(void *dest, void *src, size_t size,
 
         ucc_info("memcpystart user data : %p", user_data);
         status = ucc_coll_task_get_executor(&task->super, &exec);
-        if (ucc_unlikely(status != UCC_OK)) {
-            return status;
+        if (ucc_unlikely(status < 0)) {
+            return -1;
         }
 
         eargs.task_type = UCC_EE_EXECUTOR_TASK_COPY;
@@ -155,15 +155,16 @@ static int memcpy_device_start(void *dest, void *src, size_t size,
         node_ucc_ee_executor_task_t *new_node;
         new_node = ucc_mpool_get(&task->allgather_kn.etask_node_mpool);
         if (ucc_unlikely(!new_node)) {
-            return UCC_ERR_NO_MEMORY;
+            return -1;
         }
         status = ucc_ee_executor_task_post(exec, &eargs,
                                            &new_node->etask);
-        task->allgather_kn.etask_linked_list_head->etask->completion = completion;
+        new_node->etask->completion = completion;
+        new_node->etask->finished = 0;
         
-        if (ucc_unlikely(status != UCC_OK)) {
+        if (ucc_unlikely(status < 0)) {
             task->super.status = status;
-            return status;
+            return -1;
         }
         new_node->next = task->allgather_kn.etask_linked_list_head;
         task->allgather_kn.etask_linked_list_head = new_node;
