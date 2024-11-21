@@ -258,10 +258,8 @@ ucc_status_t register_memory(ucc_coll_task_t *coll_task){
     size_t                 dt_size   = ucc_dt_size(args->dst.info.datatype);
     size_t                 data_size = count * dt_size;
     ucc_rank_t             size      = task->subset.map.ep_num;
-    ucc_info("size : %d", size);
     ucc_rank_t             broot     = args->coll_type == UCC_COLL_TYPE_BCAST ?
                                        args->root : 0;
-    ucc_info("coll_type : %d", args->coll_type);
     ucc_rank_t             rank      = VRANK(task->subset.myrank, broot, size);
     size_t                 local     = GET_LOCAL_COUNT(args, size, rank);
     void                  *sbuf;
