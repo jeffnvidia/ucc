@@ -431,7 +431,7 @@ static inline ucc_status_t ucc_tl_ucp_test_with_etasks(ucc_tl_ucp_task_t *task)
     node_ucc_ee_executor_task_t *current_node;
     node_ucc_ee_executor_task_t *prev_node;
 
-    ucc_info("in test_with_etasks");
+    // ucc_info("in test_with_etasks");
 
     if (UCC_TL_UCP_TASK_P2P_COMPLETE(task) && task->allgather_kn.etask_linked_list_head==NULL) {
         return UCC_OK;
@@ -442,7 +442,7 @@ static inline ucc_status_t ucc_tl_ucp_test_with_etasks(ucc_tl_ucp_task_t *task)
         while(current_node != NULL) {
             status = ucc_ee_executor_task_test(current_node->etask);                            
             if (status == UCC_OK) {
-                ucc_info("finished : %d", current_node->etask->finished);
+                // ucc_info("finished : %d", current_node->etask->finished);
                 ucp_memcpy_device_complete(current_node->etask->completion, ucc_status_to_ucs_status(status));
                 current_node->etask->finished = 1;                                            
                 status_2 = ucc_ee_executor_task_finalize(current_node->etask);
@@ -498,7 +498,7 @@ static inline ucc_status_t ucc_tl_ucp_test_recv_with_etasks(ucc_tl_ucp_task_t *t
     node_ucc_ee_executor_task_t *current_node;
     node_ucc_ee_executor_task_t *prev_node;
 
-    ucc_info("In recv_with_etasks");
+    // ucc_info("In recv_with_etasks");
 
     if (UCC_TL_UCP_TASK_RECV_COMPLETE(task) && task->allgather_kn.etask_linked_list_head==NULL) {
         return UCC_OK;
@@ -509,7 +509,7 @@ static inline ucc_status_t ucc_tl_ucp_test_recv_with_etasks(ucc_tl_ucp_task_t *t
         while(current_node != NULL) {
             status = ucc_ee_executor_task_test(current_node->etask);                            
             if (status == UCC_OK) {
-                ucc_info("finished : %d", current_node->etask->finished);          
+                // ucc_info("finished : %d", current_node->etask->finished);          
                 ucp_memcpy_device_complete(current_node->etask->completion, ucc_status_to_ucs_status(status));
                 current_node->etask->finished = 1;
                 status_2 = ucc_ee_executor_task_finalize(current_node->etask);

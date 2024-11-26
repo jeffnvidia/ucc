@@ -121,7 +121,7 @@ ucc_tl_ucp_send_common_with_mem(void *buffer, size_t msglen, ucc_memory_type_t m
     req_param.user_data   = user_data;
     req_param.memh       = mh;
     task->tagged.send_posted++;
-    ucc_info("before ucx, user_data : %p", user_data);
+    // ucc_info("before ucx, user_data : %p", user_data);
     return ucp_tag_send_nbx(ep, buffer, 1, ucp_tag, &req_param);
 }
 
@@ -231,7 +231,7 @@ ucc_tl_ucp_recv_common_with_mem(void *buffer, size_t msglen, ucc_memory_type_t m
     req_param.user_data   = user_data;
     req_param.memh = mh;
     task->tagged.recv_posted++;
-    ucc_info("before ucx (recv) : userdata : %p", user_data);
+    // ucc_info("before ucx (recv) : userdata : %p", user_data);
     return ucp_tag_recv_nbx(team->worker->ucp_worker, buffer, 1, ucp_tag,
                             ucp_tag_mask, &req_param);
 }
