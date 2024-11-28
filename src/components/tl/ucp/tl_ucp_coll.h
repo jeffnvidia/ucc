@@ -430,6 +430,7 @@ static inline ucc_status_t ucc_tl_ucp_test_with_etasks(ucc_tl_ucp_task_t *task)
     ucc_status_t status_2;
     node_ucc_ee_executor_task_t *current_node;
     node_ucc_ee_executor_task_t *prev_node;
+    node_ucc_ee_executor_task_t *to_be_removed;
 
     // ucc_info("in test_with_etasks");
 
@@ -446,7 +447,6 @@ static inline ucc_status_t ucc_tl_ucp_test_with_etasks(ucc_tl_ucp_task_t *task)
                 ucp_memcpy_device_complete(current_node->etask->completion, ucc_status_to_ucs_status(status));
                 current_node->etask->finished = 1;                                            
                 status_2 = ucc_ee_executor_task_finalize(current_node->etask);
-                ucc_mpool_put(current_node);
                 if (ucc_unlikely(status_2 < 0)){
                     tl_error(UCC_TASK_LIB(task), "task finalize didnt work");                             
                     return status_2;
@@ -457,9 +457,14 @@ static inline ucc_status_t ucc_tl_ucp_test_with_etasks(ucc_tl_ucp_task_t *task)
                 else{ //i'm on first node
                     task->allgather_kn.etask_linked_list_head = current_node->next;
                 }
+                to_be_removed = current_node;
+                current_node = current_node->next;
+                ucc_mpool_put(to_be_removed);
             }
-            prev_node = current_node;
-            current_node = current_node->next; //to iterate to next node                                                              
+            else{
+                prev_node = current_node;
+                current_node = current_node->next; //to iterate to next node  
+            }                                                            
         }                                                                               
         if (UCC_TL_UCP_TASK_P2P_COMPLETE(task) && task->allgather_kn.etask_linked_list_head == NULL) {
             return UCC_OK;
@@ -497,6 +502,7 @@ static inline ucc_status_t ucc_tl_ucp_test_recv_with_etasks(ucc_tl_ucp_task_t *t
     ucc_status_t status_2;
     node_ucc_ee_executor_task_t *current_node;
     node_ucc_ee_executor_task_t *prev_node;
+    node_ucc_ee_executor_task_t *to_be_removed;
 
     // ucc_info("In recv_with_etasks");
 
@@ -513,7 +519,6 @@ static inline ucc_status_t ucc_tl_ucp_test_recv_with_etasks(ucc_tl_ucp_task_t *t
                 ucp_memcpy_device_complete(current_node->etask->completion, ucc_status_to_ucs_status(status));
                 current_node->etask->finished = 1;
                 status_2 = ucc_ee_executor_task_finalize(current_node->etask);
-                ucc_mpool_put(current_node);
                 if (ucc_unlikely(status_2 < 0)){
                     tl_error(UCC_TASK_LIB(task), "task finalize didnt work");                             
                     return status_2;
@@ -524,9 +529,14 @@ static inline ucc_status_t ucc_tl_ucp_test_recv_with_etasks(ucc_tl_ucp_task_t *t
                 else{ //i'm on first node
                     task->allgather_kn.etask_linked_list_head = current_node->next;
                 }
+                to_be_removed = current_node;
+                current_node = current_node->next;
+                ucc_mpool_put(to_be_removed);
             }                                                                      
-            prev_node = current_node;
-            current_node = current_node->next; //to iterate to next node                                                              
+            else{
+                prev_node = current_node;
+                current_node = current_node->next; //to iterate to next node  
+            }                                                            
         }
         if (UCC_TL_UCP_TASK_RECV_COMPLETE(task) && task->allgather_kn.etask_linked_list_head==NULL) {
             return UCC_OK;
