@@ -197,11 +197,11 @@ static int memcpy_device(void *dest, void *src, size_t size, void *user_data){
     }        
     status = ucc_ee_executor_task_test(etask);
     while (status>0) {
-        status = ucc_ee_executor_task_test(etask);
-        if (ucc_unlikely(status < 0)) {                                                                   
-            return status;                                                            
-        }                                                         
-    }                                                          
+        status = ucc_ee_executor_task_test(etask);                                                    
+    }                                             
+    if (ucc_unlikely(status < 0)) {                                                                   
+        return status;                                                            
+    }                  
     status = ucc_ee_executor_task_finalize(etask);
     if (ucc_unlikely(status < 0)) {                                                                   
         return status;                                                            
