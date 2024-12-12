@@ -440,7 +440,7 @@ ucc_status_t ucc_tl_ucp_allgather_knomial_init_r(
     }
     task->allgather_kn.etask_linked_list_head = NULL;
     task->allgather_kn.p.radix = radix;
-    task->super.flags         |= UCC_COLL_TASK_FLAG_EXECUTOR;
+    task->super.flags         |= UCC_EE_EXECUTOR_PARAM_FIELD_TASK_TYPES ;
     task->super.post           = ucc_tl_ucp_allgather_knomial_start;
     task->super.progress       = ucc_tl_ucp_allgather_knomial_progress;
     task->super.finalize       = ucc_tl_ucp_allgather_knomial_finalize;
