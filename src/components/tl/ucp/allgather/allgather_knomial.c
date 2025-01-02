@@ -422,6 +422,7 @@ ucc_status_t ucc_tl_ucp_allgather_knomial_init_r(
     ucc_tl_ucp_task_t *task;
     ucc_sbgp_t        *sbgp;
     ucc_status_t       status;
+    int                use_loopback = UCC_TL_UCP_TEAM_LIB(team)->cfg.allgather_use_loopback;
     task = ucc_tl_ucp_init_task(coll_args, team);
     status = ucc_mpool_init(&task->allgather_kn.etask_node_mpool, 0, sizeof(node_ucc_ee_executor_task_t),
                             0, UCC_CACHE_LINE_SIZE, 16, UINT_MAX, NULL,
@@ -440,7 +441,12 @@ ucc_status_t ucc_tl_ucp_allgather_knomial_init_r(
     }
     task->allgather_kn.etask_linked_list_head = NULL;
     task->allgather_kn.p.radix = radix;
-    task->super.flags         |= UCC_EE_EXECUTOR_PARAM_FIELD_TASK_TYPES ;
+    if (use_loopback){
+        task->super.flags         |= UCC_EE_EXECUTOR_PARAM_FIELD_TASK_TYPES;
+    }
+    else{
+        task->super.flags         |= UCC_COLL_TASK_FLAG_EXECUTOR;
+    }
     task->super.post           = ucc_tl_ucp_allgather_knomial_start;
     task->super.progress       = ucc_tl_ucp_allgather_knomial_progress;
     task->super.finalize       = ucc_tl_ucp_allgather_knomial_finalize;

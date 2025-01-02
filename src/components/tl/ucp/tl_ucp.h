@@ -56,6 +56,7 @@ typedef struct ucc_tl_ucp_lib_config {
     uint32_t                 reduce_scatter_kn_radix;
     uint32_t                 allgather_kn_radix;
     uint32_t                 bcast_kn_radix;
+    int                      allgather_use_loopback;
     ucc_mrange_uint_t        bcast_sag_kn_radix;
     uint32_t                 reduce_kn_radix;
     uint32_t                 gather_kn_radix;
