@@ -60,14 +60,6 @@ void ucc_tl_ucp_allgather_knomial_progress(ucc_coll_task_t *coll_task)
     ucc_status_t           status;
     size_t                 extra_count;
 
-    uint32_t USE_CUDA = UCC_TL_UCP_TEAM_LIB(team)->cfg.allgather_use_cuda;
-    if(!USE_CUDA){
-        if (UCC_INPROGRESS == ucc_tl_ucp_test(task)){
-            // should I use ucc_tl_ucp_test_with_etasks ?
-            return;
-        }
-    }
-
     EXEC_TASK_TEST(UCC_KN_PHASE_INIT, "failed during ee task test",
                    task->allgather_kn.etask);
     task->allgather_kn.etask = NULL;
@@ -208,6 +200,8 @@ ucc_status_t ucc_tl_ucp_allgather_knomial_start(ucc_coll_task_t *coll_task)
     ucc_status_t       status;
     ptrdiff_t          offset;
     ucc_ee_executor_t *exec;
+    int use_loopback = UCC_TL_UCP_TEAM_LIB(team)->cfg.allgather_use_loopback;
+
 
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task, "ucp_allgather_kn_start", 0);
     ucc_tl_ucp_task_reset(task, UCC_INPROGRESS);
@@ -218,29 +212,28 @@ ucc_status_t ucc_tl_ucp_allgather_knomial_start(ucc_coll_task_t *coll_task)
                                &task->allgather_kn.p);
         offset = ucc_buffer_block_offset(args->dst.info.count, size, rank) *
                  ucc_dt_size(args->dst.info.datatype);
-        if(USE_CUDA){
-        status = ucc_coll_task_get_executor(&task->super, &exec);
-        if (ucc_unlikely(status != UCC_OK)) {
-            task->super.status = status;
-            return status;
-        }
-        eargs.task_type = UCC_EE_EXECUTOR_TASK_COPY;
-        eargs.copy.dst  = PTR_OFFSET(args->dst.info.buffer, offset);
-        eargs.copy.src  = args->src.info.buffer;
-        eargs.copy.len  = args->src.info.count *
-                        ucc_dt_size(args->src.info.datatype);
-        status = ucc_ee_executor_task_post(exec, &eargs,
-                                        &task->allgather_kn.etask);
-        if (ucc_unlikely(status != UCC_OK)) {
-            task->super.status = status;
-            return status;
-        }
-        } else {
-            /*Loopback*/
+        if(use_loopback){
             UCPCHECK_GOTO(ucc_tl_ucp_send_nb(args->src.info.buffer, args->src.info.count * ucc_dt_size(args->src.info.datatype),
-                            args->src.info.mem_type, rank, team, task),task, out);
+                args->src.info.mem_type, rank, team, task),task, out);
             UCPCHECK_GOTO(ucc_tl_ucp_recv_nb(PTR_OFFSET(args->dst.info.buffer, offset), args->src.info.count * ucc_dt_size(args->src.info.datatype),
                             args->dst.info.mem_type, rank, team, task),task, out);
+        } else {
+            status = ucc_coll_task_get_executor(&task->super, &exec);
+            if (ucc_unlikely(status != UCC_OK)) {
+                task->super.status = status;
+                return status;
+            }
+            eargs.task_type = UCC_EE_EXECUTOR_TASK_COPY;
+            eargs.copy.dst  = PTR_OFFSET(args->dst.info.buffer, offset);
+            eargs.copy.src  = args->src.info.buffer;
+            eargs.copy.len  = args->src.info.count *
+                            ucc_dt_size(args->src.info.datatype);
+            status = ucc_ee_executor_task_post(exec, &eargs,
+                                            &task->allgather_kn.etask);
+            if (ucc_unlikely(status != UCC_OK)) {
+                task->super.status = status;
+                return status;
+            }
         }
     } else {
         ucc_kn_agx_pattern_init(size, rank, radix, args->dst.info.count,
@@ -418,12 +411,12 @@ ucc_status_t ucc_tl_ucp_allgather_knomial_init_r(
     ucc_base_coll_args_t *coll_args, ucc_base_team_t *team,
     ucc_coll_task_t **task_h, ucc_kn_radix_t radix)
 {
-    ucc_tl_ucp_team_t *tl_team = ucc_derived_of(team, ucc_tl_ucp_team_t);
-    ucc_tl_ucp_task_t *task;
+    ucc_tl_ucp_team_t *tl_team = ucc_derived_of(team, ucc_tl_ucp_team_t);    
+    ucc_tl_ucp_task_t *task = ucc_tl_ucp_init_task(coll_args, team);
     ucc_sbgp_t        *sbgp;
     ucc_status_t       status;
-    int                use_loopback = UCC_TL_UCP_TEAM_LIB(team)->cfg.allgather_use_loopback;
-    task = ucc_tl_ucp_init_task(coll_args, team);
+    ucc_tl_ucp_team_t *team_loopback = TASK_TEAM(task);
+    int use_loopback = UCC_TL_UCP_TEAM_LIB(team_loopback)->cfg.allgather_use_loopback;
     status = ucc_mpool_init(&task->allgather_kn.etask_node_mpool, 0, sizeof(node_ucc_ee_executor_task_t),
                             0, UCC_CACHE_LINE_SIZE, 16, UINT_MAX, NULL,
                             tl_team->super.super.context->ucc_context->thread_mode, "etasks_linked_list_nodes");
