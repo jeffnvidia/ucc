@@ -60,6 +60,7 @@ void ucc_tl_ucp_allgather_knomial_progress(ucc_coll_task_t *coll_task)
     ucc_status_t           status;
     size_t                 extra_count;
 
+    ucc_info("memory type : %d\n", mem_type);
     EXEC_TASK_TEST(UCC_KN_PHASE_INIT, "failed during ee task test",
                    task->allgather_kn.etask);
     task->allgather_kn.etask = NULL;
