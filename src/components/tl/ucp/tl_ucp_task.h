@@ -34,6 +34,8 @@ typedef struct ucc_tl_ucp_dpu_offload_buf_info
 enum ucc_tl_ucp_task_flags {
     /*indicates whether subset field of tl_ucp_task is set*/
     UCC_TL_UCP_TASK_FLAG_SUBSET = UCC_BIT(0),
+    /*optimize pairwise alltoall sends for concurrent throughput*/
+    UCC_TL_UCP_TASK_FLAG_MULTI_SEND = UCC_BIT(1),
 };
 
 typedef struct ucc_tl_ucp_task {

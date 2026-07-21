@@ -120,6 +120,11 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
     nreqs     = get_num_posts(team, &TASK_ARGS(task));
     data_size = (size_t)(TASK_ARGS(task).src.info.count / gsize) *
                 ucc_dt_size(TASK_ARGS(task).src.info.datatype);
+    if (nreqs > 1) {
+        task->flags |= UCC_TL_UCP_TASK_FLAG_MULTI_SEND;
+    } else {
+        task->flags &= ~UCC_TL_UCP_TASK_FLAG_MULTI_SEND;
+    }
     while ((task->tagged.send_posted < gsize ||
             task->tagged.recv_posted < gsize) &&
            (polls++ < task->n_polls)) {
