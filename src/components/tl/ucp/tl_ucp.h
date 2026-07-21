@@ -40,6 +40,13 @@
 typedef struct ucc_tl_ucp_iface {
     ucc_tl_iface_t super;
 } ucc_tl_ucp_iface_t;
+
+typedef enum {
+    UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING,
+    UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_MATCHING,
+    UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_LAST
+} ucc_tl_ucp_alltoall_pairwise_schedule_t;
+
 /* Extern iface should follow the pattern: ucc_tl_<tl_name> */
 extern ucc_tl_ucp_iface_t ucc_tl_ucp;
 
@@ -74,6 +81,7 @@ typedef struct ucc_tl_ucp_lib_config {
     ucc_on_off_auto_value_t            scatter_kn_enable_recv_zcopy;
     uint32_t                           scatterv_linear_num_posts;
     unsigned long                      alltoall_pairwise_num_posts;
+    ucc_tl_ucp_alltoall_pairwise_schedule_t alltoall_pairwise_schedule;
     unsigned long                      alltoallv_pairwise_num_posts;
     unsigned long                      allgather_batched_num_posts;
     ucc_pipeline_params_t              allreduce_sra_kn_pipeline;

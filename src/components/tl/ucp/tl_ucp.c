@@ -31,6 +31,12 @@ const char *ucc_tl_ucp_alltoall_onesided_names[] = {
     [UCC_TL_UCP_ALLTOALL_ONESIDED_LAST]  = NULL
 };
 
+static const char *alltoall_pairwise_schedules[] = {
+    [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING] = "ring",
+    [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_MATCHING] = "matching",
+    [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_LAST] = NULL
+};
+
 ucc_status_t ucc_tl_ucp_get_lib_attr(const ucc_base_lib_t *lib,
                                      ucc_base_lib_attr_t  *base_attr);
 
@@ -63,6 +69,13 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
      "pairwise algorithm",
      ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_num_posts),
      UCC_CONFIG_TYPE_ULUNITS},
+
+    {"ALLTOALL_PAIRWISE_SCHEDULE", "ring",
+     "Peer ordering for alltoall pairwise algorithm\n"
+     "ring     - current directed ring shifts\n"
+     "matching - experimental bidirectional round-robin matchings",
+     ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_schedule),
+     UCC_CONFIG_TYPE_ENUM(alltoall_pairwise_schedules)},
 
     {"ALLTOALLV_PAIRWISE_NUM_POSTS", "auto",
      "Maximum number of outstanding send and receive messages in alltoallv "

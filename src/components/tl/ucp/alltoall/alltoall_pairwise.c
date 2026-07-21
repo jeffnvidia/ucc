@@ -27,6 +27,59 @@ static inline ucc_rank_t get_send_peer(ucc_rank_t rank, ucc_rank_t size,
     return (rank - step + size) % size;
 }
 
+/*
+ * Return rank's peer in a round-robin matching. Unlike the ring shifts above,
+ * every non-self peer in a matching round exchanges data in both directions.
+ * For an odd team, the standard virtual participant represents the local self
+ * exchange, so every step still has exactly one peer per rank.
+ *
+ * This is the small scheduling experiment inspired by Continuous-Phase
+ * AllReduce: NUM_POSTS is the number of matching rounds that may be locally
+ * outstanding. It deliberately keeps the existing two-sided UCP transport and
+ * completion accounting; it does not claim to provide remote credits.
+ */
+static inline ucc_rank_t get_matching_peer(ucc_rank_t rank, ucc_rank_t size,
+                                           ucc_rank_t step)
+{
+    ucc_rank_t circle_size, rotating_size, round, delta, peer;
+
+    if ((size & 1) == 0) {
+        /* Keep self last so a shallow window starts with a remote matching. */
+        if (step == size - 1) {
+            return rank;
+        }
+        circle_size = size;
+        round       = step;
+    } else {
+        /* The virtual participant supplies one self exchange per round. */
+        circle_size = size + 1;
+        round       = step;
+    }
+
+    rotating_size = circle_size - 1;
+    if (rank == rotating_size) {
+        peer = round;
+    } else {
+        delta = (rank + rotating_size - round) % rotating_size;
+        peer  = (delta == 0) ? rotating_size :
+                               (round + rotating_size - delta) % rotating_size;
+    }
+
+    return (peer == size) ? rank : peer;
+}
+
+static inline ucc_rank_t
+get_peer(const ucc_tl_ucp_team_t *team, ucc_rank_t rank, ucc_rank_t size,
+         ucc_rank_t step, int is_send)
+{
+    if (UCC_TL_UCP_TEAM_LIB(team)->cfg.alltoall_pairwise_schedule ==
+        UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_MATCHING) {
+        return get_matching_peer(rank, size, step);
+    }
+    return is_send ? get_send_peer(rank, size, step) :
+                     get_recv_peer(rank, size, step);
+}
+
 static ucc_rank_t get_num_posts(const ucc_tl_ucp_team_t *team,
                                 const ucc_coll_args_t *args)
 {
@@ -74,7 +127,7 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
         while ((task->tagged.recv_posted < gsize) &&
                ((task->tagged.recv_posted - task->tagged.recv_completed) <
                 nreqs)) {
-            peer = get_recv_peer(grank, gsize, task->tagged.recv_posted);
+            peer = get_peer(team, grank, gsize, task->tagged.recv_posted, 0);
             UCPCHECK_GOTO(ucc_tl_ucp_recv_nb((void *)(rbuf + peer * data_size),
                                              data_size, rmem, peer, team, task),
                           task, out);
@@ -83,7 +136,7 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
         while ((task->tagged.send_posted < gsize) &&
                ((task->tagged.send_posted - task->tagged.send_completed) <
                 nreqs)) {
-            peer = get_send_peer(grank, gsize, task->tagged.send_posted);
+            peer = get_peer(team, grank, gsize, task->tagged.send_posted, 1);
             UCPCHECK_GOTO(ucc_tl_ucp_send_nb((void *)(sbuf + peer * data_size),
                                              data_size, smem, peer, team, task),
                           task, out);
