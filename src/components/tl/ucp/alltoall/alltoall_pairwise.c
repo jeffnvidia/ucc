@@ -151,18 +151,12 @@ static ucc_rank_t adaptive_get_num_posts(ucc_tl_ucp_team_t *team,
         return 1;
     }
 
-    /* Leave one cold round, timed rounds, and one round after switching. */
-    if (UCC_TL_UCP_TEAM_LIB(team)->cfg.
-            alltoall_pairwise_adaptive_profile_rounds) {
-        task->alltoall_pairwise.num_samples =
-            ucc_min((size > 2) ? size - 2 : 0,
-                    UCC_TL_UCP_A2A_PROFILE_MAX_ROUNDS);
-    } else {
-        task->alltoall_pairwise.num_samples =
-            ucc_min(ucc_max(1, UCC_TL_UCP_TEAM_LIB(team)->cfg.
-                                      alltoall_pairwise_adaptive_num_samples),
-                    (size > 2) ? size - 2 : 0);
-    }
+    /* Leave one cold round and one round after switching.  Sample every round
+     * in between: the fill depth is governed by the slow endpoint/path phase,
+     * not by the mean request lifetime, which is nearly rank independent. */
+    task->alltoall_pairwise.num_samples =
+        ucc_min((size > 2) ? size - 2 : 0,
+                UCC_TL_UCP_A2A_PROFILE_MAX_ROUNDS);
     task->alltoall_pairwise.num_posts = 1;
     task->alltoall_pairwise.bootstrapping =
         task->alltoall_pairwise.num_samples != 0;
@@ -278,8 +272,11 @@ static ucc_status_t adaptive_bootstrap_sample(ucc_tl_ucp_team_t *team,
         return UCC_OK;
     }
 
-    elapsed = (ucc_get_time() - task->alltoall_pairwise.start_time) /
-              task->alltoall_pairwise.num_samples;
+    elapsed = 0;
+    for (i = 0; i < task->alltoall_pairwise.sample_count; i++) {
+        elapsed = ucc_max(elapsed,
+                          task->alltoall_pairwise.round_ns[i] / 1e9);
+    }
     status = adaptive_get_bandwidth(team, peer_size,
                                     &task->alltoall_pairwise.bandwidth);
     if (status == UCC_OK) {
@@ -455,7 +452,7 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
         task->super.status = UCC_INPROGRESS;
         if (grank == 0) {
             tl_info(UCC_TL_UCP_TEAM_LIB(team),
-                    "adaptive alltoall bootstrap peer_bin %u request %.3f us "
+                    "adaptive alltoall bootstrap peer_bin %u tail_request %.3f us "
                     "ucx_bw %.3f GB/s posts %u",
                     task->alltoall_pairwise.size_bin,
                     team->a2a_adaptive[task->alltoall_pairwise.size_bin].
