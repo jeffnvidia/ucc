@@ -358,7 +358,8 @@ static unsigned alltoall_pairwise_worker_progress(ucc_tl_ucp_team_t *team,
                     1e9;
     /* The first call includes time between task enqueue and progress-queue
      * dispatch. It is not a pause inside this collective's progress loop. */
-    if (task->alltoall_pairwise.progress_calls > 0) {
+    if ((task->alltoall_pairwise.progress_calls > 0) &&
+        task->alltoall_pairwise.bootstrapping) {
         task->alltoall_pairwise.max_progress_gap_ns =
             ucc_max(task->alltoall_pairwise.max_progress_gap_ns,
                     (uint64_t)since_last_ns);
