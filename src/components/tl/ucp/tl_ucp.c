@@ -78,22 +78,16 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
      UCC_CONFIG_TYPE_ENUM(alltoall_pairwise_schedules)},
 
     {"ALLTOALL_PAIRWISE_ADAPTIVE", "n",
-     "Experimentally compare and cache pairwise post depths across repeated "
-     "alltoall calls of the same peer-message-size class",
+     "Bootstrap at one outstanding matching round, calculate the required "
+     "pairwise post depth from measured request lifetime and UCX bandwidth, "
+     "and cache it by peer-message-size class",
      ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_adaptive),
      UCC_CONFIG_TYPE_BOOL},
 
-    {"ALLTOALL_PAIRWISE_ADAPTIVE_NUM_SAMPLES", "2",
-     "Number of completed alltoall samples used to evaluate each post depth",
+    {"ALLTOALL_PAIRWISE_ADAPTIVE_NUM_SAMPLES", "3",
+     "Number of P=1 matching rounds timed after the cold round",
      ucc_offsetof(ucc_tl_ucp_lib_config_t,
                   alltoall_pairwise_adaptive_num_samples),
-     UCC_CONFIG_TYPE_UINT},
-
-    {"ALLTOALL_PAIRWISE_ADAPTIVE_MIN_GAIN", "0",
-     "Minimum percent latency improvement required to retain a probed post "
-     "depth",
-     ucc_offsetof(ucc_tl_ucp_lib_config_t,
-                  alltoall_pairwise_adaptive_min_gain),
      UCC_CONFIG_TYPE_UINT},
 
     {"ALLTOALLV_PAIRWISE_NUM_POSTS", "auto",
