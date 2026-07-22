@@ -251,6 +251,7 @@ typedef struct ucc_tl_ucp_task {
             uint32_t   max_completion_imbalance;
             uint64_t   progress_ns;
             uint64_t   max_progress_ns;
+            uint64_t   max_progress_gap_ns;
             uint64_t   refill_ns;
             uint64_t   max_refill_ns;
             uint64_t   round_ns[UCC_TL_UCP_A2A_PROFILE_MAX_ROUNDS];

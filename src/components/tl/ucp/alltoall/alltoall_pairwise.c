@@ -356,6 +356,9 @@ static unsigned alltoall_pairwise_worker_progress(ucc_tl_ucp_team_t *team,
     start = ucc_get_time();
     since_last_ns = (start - task->alltoall_pairwise.occupancy_sample_time) *
                     1e9;
+    task->alltoall_pairwise.max_progress_gap_ns =
+        ucc_max(task->alltoall_pairwise.max_progress_gap_ns,
+                (uint64_t)since_last_ns);
     task->alltoall_pairwise.send_outstanding_ns += since_last_ns *
         (task->tagged.send_posted - send_before);
     task->alltoall_pairwise.recv_outstanding_ns += since_last_ns *
@@ -555,7 +558,7 @@ out:
         tl_info(UCC_TL_UCP_TEAM_LIB(team),
                 "alltoall progress profile rank %u team %u peer_bytes %lu "
                 "posts %u wall_ns %lu calls %u progress_ns %lu "
-                "max_progress_ns %lu "
+                "max_progress_ns %lu max_progress_gap_ns %lu "
                 "max_send_burst %u max_recv_burst %u send_drains %u "
                 "recv_drains %u refill_ns %lu max_refill_ns %lu "
                 "max_completion_imbalance %u "
@@ -567,6 +570,7 @@ out:
                 task->alltoall_pairwise.progress_calls,
                 (unsigned long)task->alltoall_pairwise.progress_ns,
                 (unsigned long)task->alltoall_pairwise.max_progress_ns,
+                (unsigned long)task->alltoall_pairwise.max_progress_gap_ns,
                 task->alltoall_pairwise.max_send_burst,
                 task->alltoall_pairwise.max_recv_burst,
                 task->alltoall_pairwise.send_drain_events,
@@ -614,6 +618,7 @@ ucc_status_t ucc_tl_ucp_alltoall_pairwise_start(ucc_coll_task_t *coll_task)
     task->alltoall_pairwise.max_completion_imbalance = 0;
     task->alltoall_pairwise.progress_ns = 0;
     task->alltoall_pairwise.max_progress_ns = 0;
+    task->alltoall_pairwise.max_progress_gap_ns = 0;
     task->alltoall_pairwise.refill_ns = 0;
     task->alltoall_pairwise.max_refill_ns = 0;
     task->alltoall_pairwise.send_outstanding_ns = 0;
