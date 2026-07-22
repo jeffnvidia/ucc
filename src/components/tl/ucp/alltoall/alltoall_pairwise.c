@@ -329,6 +329,73 @@ static ucc_status_t adaptive_bootstrap_sample(ucc_tl_ucp_team_t *team,
     return (status == UCC_OK) ? UCC_INPROGRESS : status;
 }
 
+static unsigned alltoall_pairwise_worker_progress(ucc_tl_ucp_team_t *team,
+                                                  ucc_tl_ucp_task_t *task)
+{
+    uint32_t send_before, recv_before, send_burst, recv_burst, imbalance;
+    uint64_t elapsed_ns;
+    double   start, stop;
+    unsigned count;
+
+    if (!task->alltoall_pairwise.progress_profile) {
+        return ucp_worker_progress(UCC_TL_UCP_TEAM_CTX(team)->worker.ucp_worker);
+    }
+
+    send_before = task->tagged.send_completed;
+    recv_before = task->tagged.recv_completed;
+    start = ucc_get_time();
+    count = ucp_worker_progress(UCC_TL_UCP_TEAM_CTX(team)->worker.ucp_worker);
+    stop = ucc_get_time();
+    elapsed_ns = (uint64_t)((stop - start) * 1e9);
+    send_burst = task->tagged.send_completed - send_before;
+    recv_burst = task->tagged.recv_completed - recv_before;
+    imbalance = (task->tagged.send_completed > task->tagged.recv_completed) ?
+                task->tagged.send_completed - task->tagged.recv_completed :
+                task->tagged.recv_completed - task->tagged.send_completed;
+
+    task->alltoall_pairwise.progress_calls++;
+    task->alltoall_pairwise.progress_ns += elapsed_ns;
+    task->alltoall_pairwise.max_progress_ns =
+        ucc_max(task->alltoall_pairwise.max_progress_ns, elapsed_ns);
+    task->alltoall_pairwise.max_send_burst =
+        ucc_max(task->alltoall_pairwise.max_send_burst, send_burst);
+    task->alltoall_pairwise.max_recv_burst =
+        ucc_max(task->alltoall_pairwise.max_recv_burst, recv_burst);
+    task->alltoall_pairwise.max_completion_imbalance =
+        ucc_max(task->alltoall_pairwise.max_completion_imbalance, imbalance);
+
+    if ((send_burst > 0) &&
+        (task->tagged.send_posted < UCC_TL_TEAM_SIZE(team)) &&
+        (task->tagged.send_posted == task->tagged.send_completed)) {
+        task->alltoall_pairwise.send_drain_events++;
+        task->alltoall_pairwise.refill_pending = 1;
+        task->alltoall_pairwise.progress_return_time = stop;
+    }
+    if ((recv_burst > 0) &&
+        (task->tagged.recv_posted < UCC_TL_TEAM_SIZE(team)) &&
+        (task->tagged.recv_posted == task->tagged.recv_completed)) {
+        task->alltoall_pairwise.recv_drain_events++;
+    }
+    return count;
+}
+
+static ucc_status_t alltoall_pairwise_test(ucc_tl_ucp_team_t *team,
+                                           ucc_tl_ucp_task_t *task)
+{
+    int polls = 0;
+
+    if (UCC_TL_UCP_TASK_P2P_COMPLETE(task)) {
+        return UCC_OK;
+    }
+    while (polls++ < task->n_polls) {
+        if (UCC_TL_UCP_TASK_P2P_COMPLETE(task)) {
+            return UCC_OK;
+        }
+        alltoall_pairwise_worker_progress(team, task);
+    }
+    return UCC_INPROGRESS;
+}
+
 void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
 {
     ucc_tl_ucp_task_t *task  = ucc_derived_of(coll_task, ucc_tl_ucp_task_t);
@@ -340,7 +407,7 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
     ucc_rank_t         grank = UCC_TL_TEAM_RANK(team);
     ucc_rank_t         gsize = UCC_TL_TEAM_SIZE(team);
     int                polls = 0;
-    ucc_rank_t         peer, nreqs;
+    ucc_rank_t         peer, nreqs = 0;
     ucc_status_t       status;
     size_t             data_size;
 
@@ -391,7 +458,7 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
     while ((task->tagged.send_posted < gsize ||
             task->tagged.recv_posted < gsize) &&
            (polls++ < task->n_polls)) {
-        ucp_worker_progress(UCC_TL_UCP_TEAM_CTX(team)->worker.ucp_worker);
+        alltoall_pairwise_worker_progress(team, task);
         status = adaptive_bootstrap_sample(team, task, data_size);
         if (status == UCC_INPROGRESS) {
             return;
@@ -417,6 +484,15 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
                           task, out);
             polls = 0;
         }
+        if (task->alltoall_pairwise.refill_pending) {
+            uint64_t refill_ns = (uint64_t)(
+                (ucc_get_time() -
+                 task->alltoall_pairwise.progress_return_time) * 1e9);
+            task->alltoall_pairwise.refill_ns += refill_ns;
+            task->alltoall_pairwise.max_refill_ns =
+                ucc_max(task->alltoall_pairwise.max_refill_ns, refill_ns);
+            task->alltoall_pairwise.refill_pending = 0;
+        }
     }
 
     if ((task->tagged.send_posted < gsize) ||
@@ -424,7 +500,7 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
         return;
     }
 
-    task->super.status = ucc_tl_ucp_test(task);
+    task->super.status = alltoall_pairwise_test(team, task);
     if ((task->super.status == UCC_OK) &&
         task->alltoall_pairwise.priming) {
         team->a2a_adaptive[task->alltoall_pairwise.size_bin].primed = 1;
@@ -435,6 +511,31 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
         }
     }
 out:
+    if ((task->super.status != UCC_INPROGRESS) &&
+        task->alltoall_pairwise.progress_profile &&
+        !task->alltoall_pairwise.progress_profile_logged) {
+        tl_info(UCC_TL_UCP_TEAM_LIB(team),
+                "alltoall progress profile rank %u team %u peer_bytes %lu "
+                "posts %u wall_ns %lu calls %u progress_ns %lu "
+                "max_progress_ns %lu "
+                "max_send_burst %u max_recv_burst %u send_drains %u "
+                "recv_drains %u refill_ns %lu max_refill_ns %lu "
+                "max_completion_imbalance %u",
+                grank, gsize, (unsigned long)data_size, nreqs,
+                (unsigned long)((ucc_get_time() -
+                    task->alltoall_pairwise.progress_profile_start_time) * 1e9),
+                task->alltoall_pairwise.progress_calls,
+                (unsigned long)task->alltoall_pairwise.progress_ns,
+                (unsigned long)task->alltoall_pairwise.max_progress_ns,
+                task->alltoall_pairwise.max_send_burst,
+                task->alltoall_pairwise.max_recv_burst,
+                task->alltoall_pairwise.send_drain_events,
+                task->alltoall_pairwise.recv_drain_events,
+                (unsigned long)task->alltoall_pairwise.refill_ns,
+                (unsigned long)task->alltoall_pairwise.max_refill_ns,
+                task->alltoall_pairwise.max_completion_imbalance);
+        task->alltoall_pairwise.progress_profile_logged = 1;
+    }
     if (task->super.status != UCC_INPROGRESS) {
         UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task,
                                          "ucp_alltoall_pairwise_done", 0);
@@ -453,11 +554,39 @@ ucc_status_t ucc_tl_ucp_alltoall_pairwise_start(ucc_coll_task_t *coll_task)
     task->alltoall_pairwise.priming = 0;
     task->alltoall_pairwise.bootstrapping = 0;
     task->alltoall_pairwise.timing_started = 0;
+    task->alltoall_pairwise.progress_profile = 0;
+    task->alltoall_pairwise.progress_profile_logged = 0;
+    task->alltoall_pairwise.refill_pending = 0;
     task->alltoall_pairwise.num_samples = 0;
     task->alltoall_pairwise.sample_start_completed = 0;
     task->alltoall_pairwise.sample_count = 0;
     task->alltoall_pairwise.bandwidth = 0;
+    task->alltoall_pairwise.progress_calls = 0;
+    task->alltoall_pairwise.max_send_burst = 0;
+    task->alltoall_pairwise.max_recv_burst = 0;
+    task->alltoall_pairwise.send_drain_events = 0;
+    task->alltoall_pairwise.recv_drain_events = 0;
+    task->alltoall_pairwise.max_completion_imbalance = 0;
+    task->alltoall_pairwise.progress_ns = 0;
+    task->alltoall_pairwise.max_progress_ns = 0;
+    task->alltoall_pairwise.refill_ns = 0;
+    task->alltoall_pairwise.max_refill_ns = 0;
     task->alltoall_pairwise.sync_req = NULL;
+    if (UCC_TL_UCP_TEAM_LIB(team)->cfg.alltoall_pairwise_progress_profile) {
+        size_t peer_size =
+            (size_t)(TASK_ARGS(task).src.info.count / UCC_TL_TEAM_SIZE(team)) *
+            ucc_dt_size(TASK_ARGS(task).src.info.datatype);
+        ucc_tl_ucp_a2a_adaptive_state_t *state =
+            &team->a2a_adaptive[get_size_bin(peer_size)];
+
+        task->alltoall_pairwise.progress_profile =
+            state->progress_profile_calls == 1;
+        state->progress_profile_calls++;
+        if (task->alltoall_pairwise.progress_profile) {
+            task->alltoall_pairwise.progress_profile_start_time =
+                ucc_get_time();
+        }
+    }
     if (task->alltoall_pairwise.enabled) {
         adaptive_get_num_posts(team, task);
     }

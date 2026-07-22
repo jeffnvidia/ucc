@@ -86,6 +86,7 @@ typedef struct ucc_tl_ucp_lib_config {
     int                                alltoall_pairwise_adaptive;
     uint32_t                           alltoall_pairwise_adaptive_num_samples;
     int                                alltoall_pairwise_adaptive_profile_rounds;
+    int                                alltoall_pairwise_progress_profile;
     unsigned long                      alltoallv_pairwise_num_posts;
     unsigned long                      allgather_batched_num_posts;
     ucc_pipeline_params_t              allreduce_sra_kn_pipeline;
@@ -162,6 +163,7 @@ typedef struct ucc_tl_ucp_worker {
 typedef struct ucc_tl_ucp_a2a_adaptive_state {
     ucc_rank_t posts;
     int        primed;
+    uint32_t   progress_profile_calls;
     double     request_time;
     double     bandwidth;
 } ucc_tl_ucp_a2a_adaptive_state_t;

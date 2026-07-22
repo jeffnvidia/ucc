@@ -98,6 +98,13 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
                   alltoall_pairwise_adaptive_profile_rounds),
      UCC_CONFIG_TYPE_BOOL},
 
+    {"ALLTOALL_PAIRWISE_PROGRESS_PROFILE", "n",
+     "Report aggregate UCP progress, completion-burst, drain, and refill "
+     "statistics for the second alltoall in each message-size class",
+     ucc_offsetof(ucc_tl_ucp_lib_config_t,
+                  alltoall_pairwise_progress_profile),
+     UCC_CONFIG_TYPE_BOOL},
+
     {"ALLTOALLV_PAIRWISE_NUM_POSTS", "auto",
      "Maximum number of outstanding send and receive messages in alltoallv "
      "pairwise algorithm",
