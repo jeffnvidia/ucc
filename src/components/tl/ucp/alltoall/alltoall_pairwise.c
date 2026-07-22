@@ -434,7 +434,7 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
     ucc_rank_t         grank = UCC_TL_TEAM_RANK(team);
     ucc_rank_t         gsize = UCC_TL_TEAM_SIZE(team);
     int                polls = 0;
-    ucc_rank_t         peer, nreqs = 0;
+    ucc_rank_t         peer, nreqs = 0, recv_nreqs;
     ucc_status_t       status;
     size_t             data_size;
 
@@ -477,6 +477,8 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
     nreqs = task->alltoall_pairwise.enabled ?
             task->alltoall_pairwise.num_posts :
             get_num_posts(team, &TASK_ARGS(task));
+    recv_nreqs = UCC_TL_UCP_TEAM_LIB(team)->cfg.
+                      alltoall_pairwise_prepost_recvs ? gsize : nreqs;
     if (nreqs > 1) {
         task->flags |= UCC_TL_UCP_TASK_FLAG_MULTI_SEND;
     } else {
@@ -495,7 +497,7 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
         }
         while ((task->tagged.recv_posted < gsize) &&
                ((task->tagged.recv_posted - task->tagged.recv_completed) <
-                nreqs)) {
+                recv_nreqs)) {
             peer = get_peer(team, grank, gsize, task->tagged.recv_posted, 0);
             UCPCHECK_GOTO(ucc_tl_ucp_recv_nb((void *)(rbuf + peer * data_size),
                                              data_size, rmem, peer, team, task),

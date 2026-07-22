@@ -84,6 +84,7 @@ typedef struct ucc_tl_ucp_lib_config {
     uint32_t                           scatterv_linear_num_posts;
     unsigned long                      alltoall_pairwise_num_posts;
     ucc_tl_ucp_alltoall_pairwise_schedule_t alltoall_pairwise_schedule;
+    int                                alltoall_pairwise_prepost_recvs;
     int                                alltoall_pairwise_adaptive;
     uint32_t                           alltoall_pairwise_adaptive_num_samples;
     int                                alltoall_pairwise_adaptive_profile_rounds;

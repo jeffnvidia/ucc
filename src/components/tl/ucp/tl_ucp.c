@@ -80,6 +80,13 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
      ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_schedule),
      UCC_CONFIG_TYPE_ENUM(alltoall_pairwise_schedules)},
 
+    {"ALLTOALL_PAIRWISE_PREPOST_RECVS", "n",
+     "Post receives for every peer independently of the send-injection window "
+     "(experimental diagnostic)",
+     ucc_offsetof(ucc_tl_ucp_lib_config_t,
+                  alltoall_pairwise_prepost_recvs),
+     UCC_CONFIG_TYPE_BOOL},
+
     {"ALLTOALL_PAIRWISE_ADAPTIVE", "n",
      "Prime peer endpoints with one P=1 alltoall, then bootstrap at one "
      "outstanding matching round, calculate the required pairwise post depth "
