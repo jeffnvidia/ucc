@@ -160,6 +160,7 @@ typedef struct ucc_tl_ucp_worker {
 
 typedef struct ucc_tl_ucp_a2a_adaptive_state {
     ucc_rank_t posts;
+    int        primed;
     double     request_time;
     double     bandwidth;
 } ucc_tl_ucp_a2a_adaptive_state_t;

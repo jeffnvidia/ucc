@@ -78,9 +78,10 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
      UCC_CONFIG_TYPE_ENUM(alltoall_pairwise_schedules)},
 
     {"ALLTOALL_PAIRWISE_ADAPTIVE", "n",
-     "Bootstrap at one outstanding matching round, calculate the required "
-     "pairwise post depth from measured request lifetime and UCX bandwidth, "
-     "and cache it by peer-message-size class",
+     "Prime peer endpoints with one P=1 alltoall, then bootstrap at one "
+     "outstanding matching round, calculate the required pairwise post depth "
+     "from measured request lifetime and UCX bandwidth, and cache it by "
+     "peer-message-size class",
      ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_adaptive),
      UCC_CONFIG_TYPE_BOOL},
 

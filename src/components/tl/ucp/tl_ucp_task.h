@@ -227,6 +227,7 @@ typedef struct ucc_tl_ucp_task {
             uint32_t   num_samples;
             uint8_t    size_bin;
             uint8_t    enabled;
+            uint8_t    priming;
             uint8_t    bootstrapping;
             uint8_t    timing_started;
             double     start_time;

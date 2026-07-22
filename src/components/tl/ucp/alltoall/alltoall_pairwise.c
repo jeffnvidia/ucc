@@ -141,6 +141,15 @@ static ucc_rank_t adaptive_get_num_posts(ucc_tl_ucp_team_t *team,
         task->alltoall_pairwise.bootstrapping = 0;
         return state->posts;
     }
+    if (!state->primed) {
+        /* Each round uses a different endpoint. Prime all peers once before
+         * measuring steady-state request lifetime on the next collective.
+         */
+        task->alltoall_pairwise.num_posts = 1;
+        task->alltoall_pairwise.priming = 1;
+        task->alltoall_pairwise.bootstrapping = 0;
+        return 1;
+    }
 
     /* Leave one cold round, timed rounds, and one round after switching. */
     task->alltoall_pairwise.num_samples =
@@ -169,8 +178,18 @@ static ucc_status_t adaptive_get_bandwidth(ucc_tl_ucp_team_t *team,
     ucs_status_t status;
     double delta;
 
-    peer = get_peer(team, UCC_TL_TEAM_RANK(team), UCC_TL_TEAM_SIZE(team),
-                    0, 1);
+    for (peer = 0; peer < UCC_TL_TEAM_SIZE(team); peer++) {
+        ucc_rank_t candidate =
+            get_peer(team, UCC_TL_TEAM_RANK(team), UCC_TL_TEAM_SIZE(team),
+                     peer, 1);
+        if (candidate != UCC_TL_TEAM_RANK(team)) {
+            peer = candidate;
+            break;
+        }
+    }
+    if (peer == UCC_TL_TEAM_SIZE(team)) {
+        return UCC_ERR_NOT_SUPPORTED;
+    }
     ucc_status = ucc_tl_ucp_get_ep(team, peer, &ep);
     if (ucc_status != UCC_OK) {
         return ucc_status;
@@ -356,6 +375,15 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
     }
 
     task->super.status = ucc_tl_ucp_test(task);
+    if ((task->super.status == UCC_OK) &&
+        task->alltoall_pairwise.priming) {
+        team->a2a_adaptive[task->alltoall_pairwise.size_bin].primed = 1;
+        if (grank == 0) {
+            tl_info(UCC_TL_UCP_TEAM_LIB(team),
+                    "adaptive alltoall primed peer_bin %u at posts 1",
+                    task->alltoall_pairwise.size_bin);
+        }
+    }
 out:
     if (task->super.status != UCC_INPROGRESS) {
         UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task,
@@ -372,6 +400,7 @@ ucc_status_t ucc_tl_ucp_alltoall_pairwise_start(ucc_coll_task_t *coll_task)
     ucc_tl_ucp_task_reset(task, UCC_INPROGRESS);
     task->alltoall_pairwise.enabled =
         UCC_TL_UCP_TEAM_LIB(team)->cfg.alltoall_pairwise_adaptive;
+    task->alltoall_pairwise.priming = 0;
     task->alltoall_pairwise.bootstrapping = 0;
     task->alltoall_pairwise.timing_started = 0;
     task->alltoall_pairwise.num_samples = 0;
