@@ -356,9 +356,13 @@ static unsigned alltoall_pairwise_worker_progress(ucc_tl_ucp_team_t *team,
     start = ucc_get_time();
     since_last_ns = (start - task->alltoall_pairwise.occupancy_sample_time) *
                     1e9;
-    task->alltoall_pairwise.max_progress_gap_ns =
-        ucc_max(task->alltoall_pairwise.max_progress_gap_ns,
-                (uint64_t)since_last_ns);
+    /* The first call includes time between task enqueue and progress-queue
+     * dispatch. It is not a pause inside this collective's progress loop. */
+    if (task->alltoall_pairwise.progress_calls > 0) {
+        task->alltoall_pairwise.max_progress_gap_ns =
+            ucc_max(task->alltoall_pairwise.max_progress_gap_ns,
+                    (uint64_t)since_last_ns);
+    }
     task->alltoall_pairwise.send_outstanding_ns += since_last_ns *
         (task->tagged.send_posted - send_before);
     task->alltoall_pairwise.recv_outstanding_ns += since_last_ns *
