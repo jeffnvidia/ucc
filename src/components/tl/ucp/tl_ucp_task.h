@@ -238,6 +238,9 @@ typedef struct ucc_tl_ucp_task {
             double     last_sample_time;
             double     progress_return_time;
             double     progress_profile_start_time;
+            double     occupancy_sample_time;
+            double     send_outstanding_ns;
+            double     recv_outstanding_ns;
             double     bandwidth;
             uint32_t   sample_count;
             uint32_t   progress_calls;

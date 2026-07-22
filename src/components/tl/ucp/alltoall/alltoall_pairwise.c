@@ -332,9 +332,10 @@ static ucc_status_t adaptive_bootstrap_sample(ucc_tl_ucp_team_t *team,
 static unsigned alltoall_pairwise_worker_progress(ucc_tl_ucp_team_t *team,
                                                   ucc_tl_ucp_task_t *task)
 {
-    uint32_t send_before, recv_before, send_burst, recv_burst, imbalance;
+    uint32_t send_before, recv_before, send_after, recv_after;
+    uint32_t send_burst, recv_burst, imbalance;
     uint64_t elapsed_ns;
-    double   start, stop;
+    double   start, stop, since_last_ns;
     unsigned count;
 
     if (!task->alltoall_pairwise.progress_profile) {
@@ -344,11 +345,28 @@ static unsigned alltoall_pairwise_worker_progress(ucc_tl_ucp_team_t *team,
     send_before = task->tagged.send_completed;
     recv_before = task->tagged.recv_completed;
     start = ucc_get_time();
+    since_last_ns = (start - task->alltoall_pairwise.occupancy_sample_time) *
+                    1e9;
+    task->alltoall_pairwise.send_outstanding_ns += since_last_ns *
+        (task->tagged.send_posted - send_before);
+    task->alltoall_pairwise.recv_outstanding_ns += since_last_ns *
+        (task->tagged.recv_posted - recv_before);
     count = ucp_worker_progress(UCC_TL_UCP_TEAM_CTX(team)->worker.ucp_worker);
     stop = ucc_get_time();
     elapsed_ns = (uint64_t)((stop - start) * 1e9);
-    send_burst = task->tagged.send_completed - send_before;
-    recv_burst = task->tagged.recv_completed - recv_before;
+    send_after = task->tagged.send_completed;
+    recv_after = task->tagged.recv_completed;
+    send_burst = send_after - send_before;
+    recv_burst = recv_after - recv_before;
+    /* Completion time inside ucp_worker_progress is not observable here.
+     * The trapezoid is an unbiased approximation for the occupancy integral. */
+    task->alltoall_pairwise.send_outstanding_ns += elapsed_ns *
+        ((task->tagged.send_posted - send_before) +
+         (task->tagged.send_posted - send_after)) / 2.0;
+    task->alltoall_pairwise.recv_outstanding_ns += elapsed_ns *
+        ((task->tagged.recv_posted - recv_before) +
+         (task->tagged.recv_posted - recv_after)) / 2.0;
+    task->alltoall_pairwise.occupancy_sample_time = stop;
     imbalance = (task->tagged.send_completed > task->tagged.recv_completed) ?
                 task->tagged.send_completed - task->tagged.recv_completed :
                 task->tagged.recv_completed - task->tagged.send_completed;
@@ -514,16 +532,27 @@ out:
     if ((task->super.status != UCC_INPROGRESS) &&
         task->alltoall_pairwise.progress_profile &&
         !task->alltoall_pairwise.progress_profile_logged) {
+        double wall_ns = (ucc_get_time() -
+            task->alltoall_pairwise.progress_profile_start_time) * 1e9;
+        double send_lifetime_ns = task->tagged.send_completed ?
+            task->alltoall_pairwise.send_outstanding_ns /
+                task->tagged.send_completed : 0.0;
+        double recv_lifetime_ns = task->tagged.recv_completed ?
+            task->alltoall_pairwise.recv_outstanding_ns /
+                task->tagged.recv_completed : 0.0;
+
         tl_info(UCC_TL_UCP_TEAM_LIB(team),
                 "alltoall progress profile rank %u team %u peer_bytes %lu "
                 "posts %u wall_ns %lu calls %u progress_ns %lu "
                 "max_progress_ns %lu "
                 "max_send_burst %u max_recv_burst %u send_drains %u "
                 "recv_drains %u refill_ns %lu max_refill_ns %lu "
-                "max_completion_imbalance %u",
+                "max_completion_imbalance %u "
+                "send_outstanding_ns %.0f recv_outstanding_ns %.0f "
+                "send_lifetime_ns %.0f recv_lifetime_ns %.0f "
+                "mean_send_outstanding %.3f mean_recv_outstanding %.3f",
                 grank, gsize, (unsigned long)data_size, nreqs,
-                (unsigned long)((ucc_get_time() -
-                    task->alltoall_pairwise.progress_profile_start_time) * 1e9),
+                (unsigned long)wall_ns,
                 task->alltoall_pairwise.progress_calls,
                 (unsigned long)task->alltoall_pairwise.progress_ns,
                 (unsigned long)task->alltoall_pairwise.max_progress_ns,
@@ -533,7 +562,12 @@ out:
                 task->alltoall_pairwise.recv_drain_events,
                 (unsigned long)task->alltoall_pairwise.refill_ns,
                 (unsigned long)task->alltoall_pairwise.max_refill_ns,
-                task->alltoall_pairwise.max_completion_imbalance);
+                task->alltoall_pairwise.max_completion_imbalance,
+                task->alltoall_pairwise.send_outstanding_ns,
+                task->alltoall_pairwise.recv_outstanding_ns,
+                send_lifetime_ns, recv_lifetime_ns,
+                task->alltoall_pairwise.send_outstanding_ns / wall_ns,
+                task->alltoall_pairwise.recv_outstanding_ns / wall_ns);
         task->alltoall_pairwise.progress_profile_logged = 1;
     }
     if (task->super.status != UCC_INPROGRESS) {
@@ -571,6 +605,8 @@ ucc_status_t ucc_tl_ucp_alltoall_pairwise_start(ucc_coll_task_t *coll_task)
     task->alltoall_pairwise.max_progress_ns = 0;
     task->alltoall_pairwise.refill_ns = 0;
     task->alltoall_pairwise.max_refill_ns = 0;
+    task->alltoall_pairwise.send_outstanding_ns = 0;
+    task->alltoall_pairwise.recv_outstanding_ns = 0;
     task->alltoall_pairwise.sync_req = NULL;
     if (UCC_TL_UCP_TEAM_LIB(team)->cfg.alltoall_pairwise_progress_profile) {
         size_t peer_size =
@@ -585,6 +621,8 @@ ucc_status_t ucc_tl_ucp_alltoall_pairwise_start(ucc_coll_task_t *coll_task)
         if (task->alltoall_pairwise.progress_profile) {
             task->alltoall_pairwise.progress_profile_start_time =
                 ucc_get_time();
+            task->alltoall_pairwise.occupancy_sample_time =
+                task->alltoall_pairwise.progress_profile_start_time;
         }
     }
     if (task->alltoall_pairwise.enabled) {
