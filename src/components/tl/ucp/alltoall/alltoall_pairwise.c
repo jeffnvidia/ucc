@@ -137,18 +137,19 @@ static ucc_rank_t adaptive_get_num_posts(ucc_tl_ucp_team_t *team,
 
     task->alltoall_pairwise.size_bin  = size_bin;
     task->alltoall_pairwise.num_posts = state->trial_posts;
+    task->alltoall_pairwise.sync_needed = !state->converged;
     return state->trial_posts;
 }
 
 static void adaptive_record(ucc_tl_ucp_team_t *team,
-                            ucc_tl_ucp_task_t *task)
+                            ucc_tl_ucp_task_t *task, double elapsed)
 {
     ucc_tl_ucp_a2a_adaptive_state_t *state;
     ucc_tl_ucp_lib_config_t *cfg = &UCC_TL_UCP_TEAM_LIB(team)->cfg;
     ucc_rank_t size = UCC_TL_TEAM_SIZE(team);
     ucc_rank_t next;
     uint32_t nsamples;
-    double elapsed, average, keep_limit;
+    double average, keep_limit;
 
     if (!task->alltoall_pairwise.enabled ||
         task->alltoall_pairwise.recorded) {
@@ -164,7 +165,6 @@ static void adaptive_record(ucc_tl_ucp_team_t *team,
         state->primed = 1;
         return;
     }
-    elapsed = ucc_get_time() - task->alltoall_pairwise.start_time;
     state->time_sum += elapsed;
     state->samples++;
     nsamples = ucc_max(1, cfg->alltoall_pairwise_adaptive_num_samples);
@@ -267,15 +267,51 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
             polls = 0;
         }
     }
+    if (task->alltoall_pairwise.sync_req != NULL) {
+        task->super.status =
+            ucc_collective_test(
+                &task->alltoall_pairwise.sync_req->task->super);
+        if (task->super.status == UCC_INPROGRESS) {
+            return;
+        }
+        ucc_service_coll_finalize(task->alltoall_pairwise.sync_req);
+        task->alltoall_pairwise.sync_req = NULL;
+        if (task->super.status == UCC_OK) {
+            adaptive_record(team, task,
+                            task->alltoall_pairwise.max_time_ns / 1e9);
+        }
+        goto out;
+    }
+
     if ((task->tagged.send_posted < gsize) ||
         (task->tagged.recv_posted < gsize)) {
         return;
     }
 
     task->super.status = ucc_tl_ucp_test(task);
+    if ((task->super.status == UCC_OK) &&
+        task->alltoall_pairwise.enabled &&
+        task->alltoall_pairwise.sync_needed) {
+        task->alltoall_pairwise.local_time_ns =
+            (uint64_t)((ucc_get_time() -
+                        task->alltoall_pairwise.start_time) * 1e9);
+        task->alltoall_pairwise.max_time_ns = 0;
+        task->super.status = ucc_service_allreduce(
+            UCC_TL_CORE_TEAM(team),
+            &task->alltoall_pairwise.local_time_ns,
+            &task->alltoall_pairwise.max_time_ns, UCC_DT_UINT64, 1,
+            UCC_OP_MAX, task->subset,
+            &task->alltoall_pairwise.sync_req);
+        if (task->super.status == UCC_OK) {
+            task->super.status = UCC_INPROGRESS;
+            return;
+        }
+    }
 out:
     if (task->super.status != UCC_INPROGRESS) {
-        adaptive_record(team, task);
+        if (!task->alltoall_pairwise.sync_needed) {
+            adaptive_record(team, task, 0);
+        }
         UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task,
                                          "ucp_alltoall_pairwise_done", 0);
     }
@@ -291,6 +327,8 @@ ucc_status_t ucc_tl_ucp_alltoall_pairwise_start(ucc_coll_task_t *coll_task)
     task->alltoall_pairwise.enabled =
         UCC_TL_UCP_TEAM_LIB(team)->cfg.alltoall_pairwise_adaptive;
     task->alltoall_pairwise.recorded = 0;
+    task->alltoall_pairwise.sync_needed = 0;
+    task->alltoall_pairwise.sync_req = NULL;
     if (task->alltoall_pairwise.enabled) {
         adaptive_get_num_posts(team, task);
         task->alltoall_pairwise.start_time = ucc_get_time();

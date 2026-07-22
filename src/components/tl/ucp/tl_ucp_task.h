@@ -226,7 +226,11 @@ typedef struct ucc_tl_ucp_task {
             uint8_t    size_bin;
             uint8_t    enabled;
             uint8_t    recorded;
+            uint8_t    sync_needed;
             double     start_time;
+            uint64_t   local_time_ns;
+            uint64_t   max_time_ns;
+            ucc_service_coll_req_t *sync_req;
         } alltoall_pairwise;
         char                        plugin_data[UCC_TL_UCP_TASK_PLUGIN_MAX_DATA];
     };

@@ -89,7 +89,7 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
                   alltoall_pairwise_adaptive_num_samples),
      UCC_CONFIG_TYPE_UINT},
 
-    {"ALLTOALL_PAIRWISE_ADAPTIVE_MIN_GAIN", "3",
+    {"ALLTOALL_PAIRWISE_ADAPTIVE_MIN_GAIN", "0",
      "Minimum percent latency improvement required to retain a probed post "
      "depth",
      ucc_offsetof(ucc_tl_ucp_lib_config_t,
