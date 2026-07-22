@@ -214,10 +214,10 @@ static ucc_status_t adaptive_get_bandwidth(ucc_tl_ucp_team_t *team,
         return UCC_ERR_NOT_SUPPORTED;
     }
 
-    /* UCX reports aggregate full-duplex interface bandwidth. A pairwise
-     * matching has one send and one receive, so admission uses one direction.
+    /* The slope of the non-self endpoint estimate is the directional
+     * interface bandwidth used to inject one peer payload.
      */
-    *bandwidth = 0.5 * peer_size / delta;
+    *bandwidth = peer_size / delta;
     return UCC_OK;
 }
 
@@ -321,7 +321,7 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
         if (grank == 0) {
             tl_info(UCC_TL_UCP_TEAM_LIB(team),
                     "adaptive alltoall bootstrap peer_bin %u request %.3f us "
-                    "ucx_directional_bw %.3f GB/s posts %u",
+                    "ucx_bw %.3f GB/s posts %u",
                     task->alltoall_pairwise.size_bin,
                     team->a2a_adaptive[task->alltoall_pairwise.size_bin].
                         request_time * 1e6,
