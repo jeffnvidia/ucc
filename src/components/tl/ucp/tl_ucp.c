@@ -33,6 +33,8 @@ const char *ucc_tl_ucp_alltoall_onesided_names[] = {
 
 static const char *alltoall_pairwise_schedules[] = {
     [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING] = "ring",
+    [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_REMOTE_FIRST] =
+        "ring-remote-first",
     [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_MATCHING] = "matching",
     [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_LAST] = NULL
 };
@@ -73,6 +75,7 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
     {"ALLTOALL_PAIRWISE_SCHEDULE", "ring",
      "Peer ordering for alltoall pairwise algorithm\n"
      "ring     - current directed ring shifts\n"
+     "ring-remote-first - directed ring shifts with self exchange last\n"
      "matching - experimental bidirectional round-robin matchings",
      ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_schedule),
      UCC_CONFIG_TYPE_ENUM(alltoall_pairwise_schedules)},

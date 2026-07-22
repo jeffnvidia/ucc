@@ -73,9 +73,21 @@ static inline ucc_rank_t
 get_peer(const ucc_tl_ucp_team_t *team, ucc_rank_t rank, ucc_rank_t size,
          ucc_rank_t step, int is_send)
 {
-    if (UCC_TL_UCP_TEAM_LIB(team)->cfg.alltoall_pairwise_schedule ==
+    ucc_tl_ucp_alltoall_pairwise_schedule_t schedule =
+        UCC_TL_UCP_TEAM_LIB(team)->cfg.alltoall_pairwise_schedule;
+
+    if (schedule ==
         UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_MATCHING) {
         return get_matching_peer(rank, size, step);
+    }
+    if (schedule ==
+        UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_REMOTE_FIRST) {
+        /* Start useful network work immediately and keep the local self
+         * exchange out of the first remote-request timing interval. */
+        if (step == size - 1) {
+            return rank;
+        }
+        step++;
     }
     return is_send ? get_send_peer(rank, size, step) :
                      get_recv_peer(rank, size, step);
