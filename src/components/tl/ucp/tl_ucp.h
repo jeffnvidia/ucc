@@ -85,6 +85,7 @@ typedef struct ucc_tl_ucp_lib_config {
     ucc_tl_ucp_alltoall_pairwise_schedule_t alltoall_pairwise_schedule;
     int                                alltoall_pairwise_adaptive;
     uint32_t                           alltoall_pairwise_adaptive_num_samples;
+    int                                alltoall_pairwise_adaptive_profile_rounds;
     unsigned long                      alltoallv_pairwise_num_posts;
     unsigned long                      allgather_batched_num_posts;
     ucc_pipeline_params_t              allreduce_sra_kn_pipeline;

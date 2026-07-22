@@ -15,6 +15,7 @@
  #include "components/mc/base/ucc_mc_base.h"
 
 #define UCC_TL_UCP_TASK_PLUGIN_MAX_DATA 128
+#define UCC_TL_UCP_A2A_PROFILE_MAX_ROUNDS 128
 
 #define TASK_TEAM(_task)                                                       \
     (ucc_derived_of((_task)->super.team, ucc_tl_ucp_team_t))
@@ -231,7 +232,10 @@ typedef struct ucc_tl_ucp_task {
             uint8_t    bootstrapping;
             uint8_t    timing_started;
             double     start_time;
+            double     last_sample_time;
             double     bandwidth;
+            uint32_t   sample_count;
+            uint64_t   round_ns[UCC_TL_UCP_A2A_PROFILE_MAX_ROUNDS];
             uint64_t   local_metrics[2];
             uint64_t   global_metrics[2];
             ucc_service_coll_req_t *sync_req;

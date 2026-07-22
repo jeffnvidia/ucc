@@ -152,10 +152,17 @@ static ucc_rank_t adaptive_get_num_posts(ucc_tl_ucp_team_t *team,
     }
 
     /* Leave one cold round, timed rounds, and one round after switching. */
-    task->alltoall_pairwise.num_samples =
-        ucc_min(ucc_max(1, UCC_TL_UCP_TEAM_LIB(team)->cfg.
-                                  alltoall_pairwise_adaptive_num_samples),
-                (size > 2) ? size - 2 : 0);
+    if (UCC_TL_UCP_TEAM_LIB(team)->cfg.
+            alltoall_pairwise_adaptive_profile_rounds) {
+        task->alltoall_pairwise.num_samples =
+            ucc_min((size > 2) ? size - 2 : 0,
+                    UCC_TL_UCP_A2A_PROFILE_MAX_ROUNDS);
+    } else {
+        task->alltoall_pairwise.num_samples =
+            ucc_min(ucc_max(1, UCC_TL_UCP_TEAM_LIB(team)->cfg.
+                                      alltoall_pairwise_adaptive_num_samples),
+                    (size > 2) ? size - 2 : 0);
+    }
     task->alltoall_pairwise.num_posts = 1;
     task->alltoall_pairwise.bootstrapping =
         task->alltoall_pairwise.num_samples != 0;
@@ -226,8 +233,9 @@ static ucc_status_t adaptive_bootstrap_sample(ucc_tl_ucp_team_t *team,
                                               size_t peer_size)
 {
     ucc_rank_t completed, posts;
+    uint32_t   completed_samples, new_samples, i;
     ucc_status_t status;
-    double elapsed, fill;
+    double elapsed, fill, now, interval;
 
     if (!task->alltoall_pairwise.bootstrapping) {
         return UCC_OK;
@@ -242,12 +250,31 @@ static ucc_status_t adaptive_bootstrap_sample(ucc_tl_ucp_team_t *team,
         /* The first matching round initializes endpoints and UCX protocols. */
         task->alltoall_pairwise.sample_start_completed = completed;
         task->alltoall_pairwise.start_time = ucc_get_time();
+        task->alltoall_pairwise.last_sample_time =
+            task->alltoall_pairwise.start_time;
         task->alltoall_pairwise.timing_started = 1;
         return UCC_OK;
     }
 
-    if ((completed - task->alltoall_pairwise.sample_start_completed) <
-        task->alltoall_pairwise.num_samples) {
+    completed_samples =
+        completed - task->alltoall_pairwise.sample_start_completed;
+    if (completed_samples > task->alltoall_pairwise.sample_count) {
+        now = ucc_get_time();
+        new_samples = completed_samples -
+                      task->alltoall_pairwise.sample_count;
+        interval = (now - task->alltoall_pairwise.last_sample_time) /
+                   new_samples;
+        for (i = 0; i < new_samples &&
+                    task->alltoall_pairwise.sample_count <
+                        UCC_TL_UCP_A2A_PROFILE_MAX_ROUNDS; i++) {
+            task->alltoall_pairwise.round_ns[
+                task->alltoall_pairwise.sample_count++] =
+                (uint64_t)(interval * 1e9);
+        }
+        task->alltoall_pairwise.last_sample_time = now;
+    }
+
+    if (completed_samples < task->alltoall_pairwise.num_samples) {
         return UCC_OK;
     }
 
@@ -272,6 +299,29 @@ static ucc_status_t adaptive_bootstrap_sample(ucc_tl_ucp_team_t *team,
     task->alltoall_pairwise.local_metrics[1] = posts;
     task->alltoall_pairwise.global_metrics[0] = 0;
     task->alltoall_pairwise.global_metrics[1] = 0;
+    if (UCC_TL_UCP_TEAM_LIB(team)->cfg.
+            alltoall_pairwise_adaptive_profile_rounds) {
+        char   rounds[4096];
+        size_t offset = 0;
+
+        rounds[0] = '\0';
+        for (i = 0; i < task->alltoall_pairwise.sample_count; i++) {
+            int written = ucc_snprintf_safe(
+                rounds + offset, sizeof(rounds) - offset, "%s%lu",
+                (i == 0) ? "" : ",",
+                (unsigned long)task->alltoall_pairwise.round_ns[i]);
+            if ((written < 0) || ((size_t)written >= sizeof(rounds) - offset)) {
+                break;
+            }
+            offset += written;
+        }
+        tl_info(UCC_TL_UCP_TEAM_LIB(team),
+                "adaptive alltoall rounds rank %u team %u peer_bytes %lu "
+                "samples %u round_ns %s",
+                UCC_TL_TEAM_RANK(team), UCC_TL_TEAM_SIZE(team),
+                (unsigned long)peer_size,
+                task->alltoall_pairwise.sample_count, rounds);
+    }
     status = ucc_service_allreduce(
         UCC_TL_CORE_TEAM(team), task->alltoall_pairwise.local_metrics,
         task->alltoall_pairwise.global_metrics, UCC_DT_UINT64, 2, UCC_OP_MAX,
@@ -405,6 +455,7 @@ ucc_status_t ucc_tl_ucp_alltoall_pairwise_start(ucc_coll_task_t *coll_task)
     task->alltoall_pairwise.timing_started = 0;
     task->alltoall_pairwise.num_samples = 0;
     task->alltoall_pairwise.sample_start_completed = 0;
+    task->alltoall_pairwise.sample_count = 0;
     task->alltoall_pairwise.bandwidth = 0;
     task->alltoall_pairwise.sync_req = NULL;
     if (task->alltoall_pairwise.enabled) {

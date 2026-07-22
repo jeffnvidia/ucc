@@ -91,6 +91,13 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
                   alltoall_pairwise_adaptive_num_samples),
      UCC_CONFIG_TYPE_UINT},
 
+    {"ALLTOALL_PAIRWISE_ADAPTIVE_PROFILE_ROUNDS", "n",
+     "Time and report every warmed P=1 matching round before calculating the "
+     "post depth (experimental diagnostic, teams up to 128 ranks)",
+     ucc_offsetof(ucc_tl_ucp_lib_config_t,
+                  alltoall_pairwise_adaptive_profile_rounds),
+     UCC_CONFIG_TYPE_BOOL},
+
     {"ALLTOALLV_PAIRWISE_NUM_POSTS", "auto",
      "Maximum number of outstanding send and receive messages in alltoallv "
      "pairwise algorithm",
