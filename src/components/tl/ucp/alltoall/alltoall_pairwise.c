@@ -159,6 +159,11 @@ static void adaptive_record(ucc_tl_ucp_team_t *team,
     if (state->converged) {
         return;
     }
+    if (!state->primed) {
+        /* Do not attribute lazy endpoint/protocol setup to the seed depth. */
+        state->primed = 1;
+        return;
+    }
     elapsed = ucc_get_time() - task->alltoall_pairwise.start_time;
     state->time_sum += elapsed;
     state->samples++;
@@ -198,7 +203,13 @@ static void adaptive_record(ucc_tl_ucp_team_t *team,
     state->trial_posts = next;
     state->converged   = (next == state->best_posts);
 
-    if (UCC_TL_TEAM_RANK(team) == 0) {
+    if (state->converged) {
+        tl_info(UCC_TL_UCP_TEAM_LIB(team),
+                "adaptive alltoall converged rank %u peer_bin %u posts %u "
+                "%.3f us",
+                UCC_TL_TEAM_RANK(team), task->alltoall_pairwise.size_bin,
+                state->best_posts, state->best_time * 1e6);
+    } else if (UCC_TL_TEAM_RANK(team) == 0) {
         tl_info(UCC_TL_UCP_TEAM_LIB(team),
                 "adaptive alltoall peer_bin %u measured posts %u %.3f us; "
                 "best %u %.3f us, next %u, upper %u",

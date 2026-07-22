@@ -164,6 +164,7 @@ typedef struct ucc_tl_ucp_a2a_adaptive_state {
     ucc_rank_t trial_posts;
     ucc_rank_t upper_posts;
     uint32_t   samples;
+    int        primed;
     int        converged;
     double     time_sum;
     double     best_time;
