@@ -221,6 +221,13 @@ typedef struct ucc_tl_ucp_task {
             uint32_t                tokens;
             uint32_t                npolls;
         } alltoall_onesided;
+        struct {
+            ucc_rank_t num_posts;
+            uint8_t    size_bin;
+            uint8_t    enabled;
+            uint8_t    recorded;
+            double     start_time;
+        } alltoall_pairwise;
         char                        plugin_data[UCC_TL_UCP_TASK_PLUGIN_MAX_DATA];
     };
     uint32_t flush_posted;

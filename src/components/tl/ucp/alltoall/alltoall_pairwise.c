@@ -9,6 +9,7 @@
 #include "alltoall.h"
 #include "core/ucc_progress_queue.h"
 #include "utils/ucc_math.h"
+#include "utils/ucc_time.h"
 #include "tl_ucp_sendrecv.h"
 
 /* TODO: add as parameters */
@@ -103,6 +104,111 @@ static ucc_rank_t get_num_posts(const ucc_tl_ucp_team_t *team,
     return posts;
 }
 
+static uint8_t get_size_bin(size_t data_size)
+{
+    uint8_t size_bin = 0;
+
+    while ((data_size >>= 1) &&
+           (size_bin < UCC_TL_UCP_A2A_ADAPTIVE_SIZE_BINS - 1)) {
+        size_bin++;
+    }
+    return size_bin;
+}
+
+static ucc_rank_t adaptive_get_num_posts(ucc_tl_ucp_team_t *team,
+                                         ucc_tl_ucp_task_t *task)
+{
+    ucc_tl_ucp_a2a_adaptive_state_t *state;
+    ucc_rank_t seed, size;
+    size_t peer_size;
+    uint8_t size_bin;
+
+    size = UCC_TL_TEAM_SIZE(team);
+    seed = get_num_posts(team, &TASK_ARGS(task));
+    peer_size = (size_t)(TASK_ARGS(task).src.info.count / size) *
+                ucc_dt_size(TASK_ARGS(task).src.info.datatype);
+    size_bin = get_size_bin(peer_size);
+    state = &team->a2a_adaptive[size_bin];
+
+    if (state->best_posts == 0) {
+        state->best_posts  = seed;
+        state->trial_posts = seed;
+    }
+
+    task->alltoall_pairwise.size_bin  = size_bin;
+    task->alltoall_pairwise.num_posts = state->trial_posts;
+    return state->trial_posts;
+}
+
+static void adaptive_record(ucc_tl_ucp_team_t *team,
+                            ucc_tl_ucp_task_t *task)
+{
+    ucc_tl_ucp_a2a_adaptive_state_t *state;
+    ucc_tl_ucp_lib_config_t *cfg = &UCC_TL_UCP_TEAM_LIB(team)->cfg;
+    ucc_rank_t size = UCC_TL_TEAM_SIZE(team);
+    ucc_rank_t next;
+    uint32_t nsamples;
+    double elapsed, average, keep_limit;
+
+    if (!task->alltoall_pairwise.enabled ||
+        task->alltoall_pairwise.recorded) {
+        return;
+    }
+    task->alltoall_pairwise.recorded = 1;
+    state = &team->a2a_adaptive[task->alltoall_pairwise.size_bin];
+    if (state->converged) {
+        return;
+    }
+    elapsed = ucc_get_time() - task->alltoall_pairwise.start_time;
+    state->time_sum += elapsed;
+    state->samples++;
+    nsamples = ucc_max(1, cfg->alltoall_pairwise_adaptive_num_samples);
+    if (state->samples < nsamples) {
+        return;
+    }
+
+    average = state->time_sum / state->samples;
+    state->samples  = 0;
+    state->time_sum = 0;
+
+    if (state->trial_posts == state->best_posts && state->best_time == 0) {
+        state->best_time = average;
+    } else {
+        keep_limit = state->best_time *
+                     (1.0 - ucc_min(100,
+                                    cfg->alltoall_pairwise_adaptive_min_gain) /
+                                100.0);
+        if (average < keep_limit) {
+            state->best_posts = state->trial_posts;
+            state->best_time  = average;
+        } else if ((state->upper_posts == 0) ||
+                   (state->trial_posts < state->upper_posts)) {
+            state->upper_posts = state->trial_posts;
+        }
+    }
+
+    if (state->upper_posts > state->best_posts + 1) {
+        next = state->best_posts +
+               (state->upper_posts - state->best_posts) / 2;
+    } else if (state->upper_posts != 0) {
+        next = state->best_posts;
+    } else {
+        next = ucc_min(size, 2 * state->best_posts);
+    }
+    state->trial_posts = next;
+    state->converged   = (next == state->best_posts);
+
+    if (UCC_TL_TEAM_RANK(team) == 0) {
+        tl_info(UCC_TL_UCP_TEAM_LIB(team),
+                "adaptive alltoall peer_bin %u measured posts %u %.3f us; "
+                "best %u %.3f us, next %u, upper %u",
+                task->alltoall_pairwise.size_bin,
+                task->alltoall_pairwise.num_posts, average * 1e6,
+                state->best_posts, state->best_time * 1e6,
+                state->trial_posts, state->upper_posts);
+    }
+}
+
 void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
 {
     ucc_tl_ucp_task_t *task  = ucc_derived_of(coll_task, ucc_tl_ucp_task_t);
@@ -117,7 +223,9 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
     ucc_rank_t         peer, nreqs;
     size_t             data_size;
 
-    nreqs     = get_num_posts(team, &TASK_ARGS(task));
+    nreqs = task->alltoall_pairwise.enabled ?
+            task->alltoall_pairwise.num_posts :
+            get_num_posts(team, &TASK_ARGS(task));
     data_size = (size_t)(TASK_ARGS(task).src.info.count / gsize) *
                 ucc_dt_size(TASK_ARGS(task).src.info.datatype);
     if (nreqs > 1) {
@@ -156,6 +264,7 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
     task->super.status = ucc_tl_ucp_test(task);
 out:
     if (task->super.status != UCC_INPROGRESS) {
+        adaptive_record(team, task);
         UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task,
                                          "ucp_alltoall_pairwise_done", 0);
     }
@@ -168,6 +277,13 @@ ucc_status_t ucc_tl_ucp_alltoall_pairwise_start(ucc_coll_task_t *coll_task)
 
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task, "ucp_alltoall_pairwise_start", 0);
     ucc_tl_ucp_task_reset(task, UCC_INPROGRESS);
+    task->alltoall_pairwise.enabled =
+        UCC_TL_UCP_TEAM_LIB(team)->cfg.alltoall_pairwise_adaptive;
+    task->alltoall_pairwise.recorded = 0;
+    if (task->alltoall_pairwise.enabled) {
+        adaptive_get_num_posts(team, task);
+        task->alltoall_pairwise.start_time = ucc_get_time();
+    }
 
     return ucc_progress_queue_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
 }

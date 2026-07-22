@@ -13,6 +13,7 @@
 #include "utils/ucc_parser.h"
 #include "coll_score/ucc_coll_score.h"
 #include "coll_patterns/ring.h"
+#include <string.h>
 
 static inline ucc_status_t ucc_tl_ucp_get_topo(ucc_tl_ucp_team_t *team)
 {
@@ -85,6 +86,7 @@ UCC_CLASS_INIT_FUNC(ucc_tl_ucp_team_t, ucc_base_context_t *tl_context,
     self->opt_radix       = UCC_UUNITS_AUTO_RADIX;
     self->opt_radix_host  = UCC_UUNITS_AUTO_RADIX;
     self->cuda_ring       = NULL;
+    memset(self->a2a_adaptive, 0, sizeof(self->a2a_adaptive));
 
     status = ucc_config_clone_table(&UCC_TL_UCP_TEAM_LIB(self)->cfg, &self->cfg,
                                     ucc_tl_ucp_lib_config_table);
