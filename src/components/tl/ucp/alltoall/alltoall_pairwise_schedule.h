@@ -7,7 +7,7 @@
 #ifndef ALLTOALL_PAIRWISE_SCHEDULE_H_
 #define ALLTOALL_PAIRWISE_SCHEDULE_H_
 
-#include "ucc/api/ucc.h"
+#include "utils/ucc_datastruct.h"
 
 /*
  * Convert a node-major rank list into a node-interleaved ring order.
