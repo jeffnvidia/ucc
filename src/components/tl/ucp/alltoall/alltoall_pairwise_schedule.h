@@ -7,18 +7,19 @@
 #ifndef ALLTOALL_PAIRWISE_SCHEDULE_H_
 #define ALLTOALL_PAIRWISE_SCHEDULE_H_
 
-#include "utils/ucc_datastruct.h"
+#include "utils/ucc_coll_utils.h"
 
 /*
- * Convert a node-major rank list into a node-interleaved ring order.
+ * Convert node endpoint maps into a node-interleaved ring order.
  *
- * node_ranks contains ranks grouped by node, with the same number of ranks on
- * every node. rank_order maps a virtual ring label to a team rank, while
- * rank_labels provides the inverse mapping. Keeping this helper independent of
- * ucc_topo_t makes the permutation and fallback checks directly unit-testable.
+ * node_maps contains one team-rank map per node, with the same number of ranks
+ * on every node. rank_order maps a virtual ring label to a team rank, while
+ * rank_labels provides the inverse mapping. UCC may optimize a node's backing
+ * rank array into a strided map, so callers must evaluate the generic map
+ * rather than depend on a materialized rank_map.
  */
 static inline ucc_status_t
-ucc_tl_ucp_alltoall_topo_ring_build_map(const ucc_rank_t *node_ranks,
+ucc_tl_ucp_alltoall_topo_ring_build_map(const ucc_ep_map_t *node_maps,
                                         ucc_rank_t size, ucc_rank_t nnodes,
                                         ucc_rank_t ppn,
                                         ucc_rank_t *rank_order,
@@ -26,7 +27,7 @@ ucc_tl_ucp_alltoall_topo_ring_build_map(const ucc_rank_t *node_ranks,
 {
     ucc_rank_t label, local_rank, node, rank;
 
-    if (!node_ranks || !rank_order || !rank_labels || nnodes <= 1 || ppn <= 1 ||
+    if (!node_maps || !rank_order || !rank_labels || nnodes <= 1 || ppn <= 1 ||
         size / nnodes != ppn || size % nnodes != 0) {
         return UCC_ERR_INVALID_PARAM;
     }
@@ -37,7 +38,10 @@ ucc_tl_ucp_alltoall_topo_ring_build_map(const ucc_rank_t *node_ranks,
 
     for (local_rank = 0; local_rank < ppn; local_rank++) {
         for (node = 0; node < nnodes; node++) {
-            rank  = node_ranks[node * ppn + local_rank];
+            if (node_maps[node].ep_num != ppn) {
+                return UCC_ERR_INVALID_PARAM;
+            }
+            rank  = ucc_ep_map_eval(node_maps[node], local_rank);
             label = local_rank * nnodes + node;
             if (rank >= size || rank_labels[rank] != UCC_RANK_INVALID) {
                 return UCC_ERR_INVALID_PARAM;

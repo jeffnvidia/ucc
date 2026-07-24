@@ -50,8 +50,8 @@ err_topo_init:
 static void ucc_tl_ucp_init_alltoall_topo_ring(ucc_tl_ucp_team_t *team)
 {
     ucc_sbgp_t *nodes;
-    ucc_rank_t *node_ranks;
-    ucc_rank_t  nnodes, ppn, size, node, local_rank;
+    ucc_ep_map_t *node_maps;
+    ucc_rank_t  nnodes, ppn, size, node;
     ucc_status_t status;
     int          n_nodes;
 
@@ -86,15 +86,15 @@ static void ucc_tl_ucp_init_alltoall_topo_ring(ucc_tl_ucp_team_t *team)
         return;
     }
 
-    node_ranks = ucc_malloc(size * sizeof(*node_ranks),
-                            "alltoall_topo_node_ranks");
+    node_maps = ucc_malloc(nnodes * sizeof(*node_maps),
+                           "alltoall_topo_node_maps");
     team->alltoall_topo_ring.rank_order =
         ucc_malloc(size * sizeof(*team->alltoall_topo_ring.rank_order),
                    "alltoall_topo_rank_order");
     team->alltoall_topo_ring.rank_labels =
         ucc_malloc(size * sizeof(*team->alltoall_topo_ring.rank_labels),
                    "alltoall_topo_rank_labels");
-    if (!node_ranks || !team->alltoall_topo_ring.rank_order ||
+    if (!node_maps || !team->alltoall_topo_ring.rank_order ||
         !team->alltoall_topo_ring.rank_labels) {
         tl_debug(UCC_TL_UCP_TEAM_LIB(team),
                  "alltoall topology ring unavailable: allocation failed; "
@@ -103,21 +103,18 @@ static void ucc_tl_ucp_init_alltoall_topo_ring(ucc_tl_ucp_team_t *team)
     }
 
     for (node = 0; node < nnodes; node++) {
-        if (nodes[node].group_size != ppn || !nodes[node].rank_map) {
+        if (nodes[node].group_size != ppn) {
             tl_debug(UCC_TL_UCP_TEAM_LIB(team),
                      "alltoall topology ring unavailable: node %u has "
-                     "invalid rank map; using ordinary ring",
+                     "invalid endpoint map; using ordinary ring",
                      node);
             goto out;
         }
-        for (local_rank = 0; local_rank < ppn; local_rank++) {
-            node_ranks[node * ppn + local_rank] =
-                nodes[node].rank_map[local_rank];
-        }
+        node_maps[node] = nodes[node].map;
     }
 
     status = ucc_tl_ucp_alltoall_topo_ring_build_map(
-        node_ranks, size, nnodes, ppn,
+        node_maps, size, nnodes, ppn,
         team->alltoall_topo_ring.rank_order,
         team->alltoall_topo_ring.rank_labels);
     if (status != UCC_OK) {
@@ -133,7 +130,7 @@ static void ucc_tl_ucp_init_alltoall_topo_ring(ucc_tl_ucp_team_t *team)
              size, nnodes, ppn);
 
 out:
-    ucc_free(node_ranks);
+    ucc_free(node_maps);
     if (!team->alltoall_topo_ring.enabled) {
         ucc_free(team->alltoall_topo_ring.rank_order);
         ucc_free(team->alltoall_topo_ring.rank_labels);
