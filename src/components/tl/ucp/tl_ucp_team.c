@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -13,6 +13,7 @@
 #include "utils/ucc_parser.h"
 #include "coll_score/ucc_coll_score.h"
 #include "coll_patterns/ring.h"
+#include "alltoall/alltoall_pairwise_schedule.h"
 
 static inline ucc_status_t ucc_tl_ucp_get_topo(ucc_tl_ucp_team_t *team)
 {
@@ -44,6 +45,101 @@ static inline ucc_status_t ucc_tl_ucp_get_topo(ucc_tl_ucp_team_t *team)
 err_topo_init:
     ucc_ep_map_destroy_nested(&team->ctx_map);
     return status;
+}
+
+static void ucc_tl_ucp_init_alltoall_topo_ring(ucc_tl_ucp_team_t *team)
+{
+    ucc_sbgp_t *nodes;
+    ucc_rank_t *node_ranks;
+    ucc_rank_t  nnodes, ppn, size, node, local_rank;
+    ucc_status_t status;
+    int          n_nodes;
+
+    if (team->cfg.alltoall_pairwise_schedule !=
+        UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY) {
+        return;
+    }
+    if (!team->topo || ucc_topo_is_single_node(team->topo) ||
+        !ucc_topo_isoppn(team->topo)) {
+        tl_debug(UCC_TL_UCP_TEAM_LIB(team),
+                 "alltoall topology ring unavailable: topology is missing, "
+                 "single-node, or has uneven ppn; using ordinary ring");
+        return;
+    }
+
+    size   = UCC_TL_TEAM_SIZE(team);
+    nnodes = ucc_topo_nnodes(team->topo);
+    ppn    = ucc_topo_min_ppn(team->topo);
+    if (nnodes <= 1 || ppn <= 1 || nnodes * ppn != size) {
+        tl_debug(UCC_TL_UCP_TEAM_LIB(team),
+                 "alltoall topology ring unavailable: invalid team geometry "
+                 "size %u nnodes %u ppn %u; using ordinary ring",
+                 size, nnodes, ppn);
+        return;
+    }
+
+    status = ucc_topo_get_all_nodes(team->topo, &nodes, &n_nodes);
+    if (status != UCC_OK || (ucc_rank_t)n_nodes != nnodes) {
+        tl_debug(UCC_TL_UCP_TEAM_LIB(team),
+                 "alltoall topology ring unavailable: failed to obtain all "
+                 "node groups; using ordinary ring");
+        return;
+    }
+
+    node_ranks = ucc_malloc(size * sizeof(*node_ranks),
+                            "alltoall_topo_node_ranks");
+    team->alltoall_topo_ring.rank_order =
+        ucc_malloc(size * sizeof(*team->alltoall_topo_ring.rank_order),
+                   "alltoall_topo_rank_order");
+    team->alltoall_topo_ring.rank_labels =
+        ucc_malloc(size * sizeof(*team->alltoall_topo_ring.rank_labels),
+                   "alltoall_topo_rank_labels");
+    if (!node_ranks || !team->alltoall_topo_ring.rank_order ||
+        !team->alltoall_topo_ring.rank_labels) {
+        tl_debug(UCC_TL_UCP_TEAM_LIB(team),
+                 "alltoall topology ring unavailable: allocation failed; "
+                 "using ordinary ring");
+        goto out;
+    }
+
+    for (node = 0; node < nnodes; node++) {
+        if (nodes[node].group_size != ppn || !nodes[node].rank_map) {
+            tl_debug(UCC_TL_UCP_TEAM_LIB(team),
+                     "alltoall topology ring unavailable: node %u has "
+                     "invalid rank map; using ordinary ring",
+                     node);
+            goto out;
+        }
+        for (local_rank = 0; local_rank < ppn; local_rank++) {
+            node_ranks[node * ppn + local_rank] =
+                nodes[node].rank_map[local_rank];
+        }
+    }
+
+    status = ucc_tl_ucp_alltoall_topo_ring_build_map(
+        node_ranks, size, nnodes, ppn,
+        team->alltoall_topo_ring.rank_order,
+        team->alltoall_topo_ring.rank_labels);
+    if (status != UCC_OK) {
+        tl_debug(UCC_TL_UCP_TEAM_LIB(team),
+                 "alltoall topology ring unavailable: invalid rank "
+                 "permutation; using ordinary ring");
+        goto out;
+    }
+
+    team->alltoall_topo_ring.enabled = 1;
+    tl_debug(UCC_TL_UCP_TEAM_LIB(team),
+             "alltoall topology ring enabled: size %u nnodes %u ppn %u",
+             size, nnodes, ppn);
+
+out:
+    ucc_free(node_ranks);
+    if (!team->alltoall_topo_ring.enabled) {
+        ucc_free(team->alltoall_topo_ring.rank_order);
+        ucc_free(team->alltoall_topo_ring.rank_labels);
+        team->alltoall_topo_ring.rank_order  = NULL;
+        team->alltoall_topo_ring.rank_labels = NULL;
+    }
 }
 
 UCC_CLASS_INIT_FUNC(ucc_tl_ucp_team_t, ucc_base_context_t *tl_context,
@@ -82,6 +178,9 @@ UCC_CLASS_INIT_FUNC(ucc_tl_ucp_team_t, ucc_base_context_t *tl_context,
     self->status          = UCC_INPROGRESS;
     self->tuning_str      = "";
     self->topo            = NULL;
+    self->alltoall_topo_ring.rank_order  = NULL;
+    self->alltoall_topo_ring.rank_labels = NULL;
+    self->alltoall_topo_ring.enabled     = 0;
     self->opt_radix       = UCC_UUNITS_AUTO_RADIX;
     self->opt_radix_host  = UCC_UUNITS_AUTO_RADIX;
     self->cuda_ring       = NULL;
@@ -110,6 +209,8 @@ UCC_CLASS_INIT_FUNC(ucc_tl_ucp_team_t, ucc_base_context_t *tl_context,
             ucc_debug("section not found");
         }
     }
+
+    ucc_tl_ucp_init_alltoall_topo_ring(self);
 
     if (!self->topo && self->cfg.use_reordering) {
         tl_debug(tl_context->lib,
@@ -179,6 +280,12 @@ UCC_CLASS_DEFINE(ucc_tl_ucp_team_t, ucc_tl_team_t);
 ucc_status_t ucc_tl_ucp_team_destroy(ucc_base_team_t *tl_team)
 {
     ucc_tl_ucp_team_t *team = ucc_derived_of(tl_team, ucc_tl_ucp_team_t);
+
+    ucc_free(team->alltoall_topo_ring.rank_order);
+    ucc_free(team->alltoall_topo_ring.rank_labels);
+    team->alltoall_topo_ring.rank_order  = NULL;
+    team->alltoall_topo_ring.rank_labels = NULL;
+    team->alltoall_topo_ring.enabled     = 0;
 
     if (team->cuda_ring) {
         ucc_ring_pattern_destroy(team->cuda_ring);
