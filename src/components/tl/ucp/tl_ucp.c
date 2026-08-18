@@ -78,6 +78,22 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
      ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_schedule),
      UCC_CONFIG_TYPE_ENUM(alltoall_pairwise_schedules)},
 
+    {"ALLTOALL_PAIRWISE_TRACE", "n",
+     "Record a bounded post/completion timeline for selected pairwise "
+     "alltoall collectives",
+     ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_trace),
+     UCC_CONFIG_TYPE_BOOL},
+
+    {"ALLTOALL_PAIRWISE_TRACE_SKIP", "0",
+     "Number of pairwise alltoall collectives to skip before tracing",
+     ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_trace_skip),
+     UCC_CONFIG_TYPE_UINT},
+
+    {"ALLTOALL_PAIRWISE_TRACE_COUNT", "1",
+     "Number of pairwise alltoall collectives to trace after the skip",
+     ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_trace_count),
+     UCC_CONFIG_TYPE_UINT},
+
     {"ALLTOALLV_PAIRWISE_NUM_POSTS", "auto",
      "Maximum number of outstanding send and receive messages in alltoallv "
      "pairwise algorithm",

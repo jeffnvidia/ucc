@@ -10,11 +10,136 @@
 #include "alltoall_pairwise_schedule.h"
 #include "core/ucc_progress_queue.h"
 #include "utils/ucc_math.h"
+#include "utils/ucc_malloc.h"
 #include "tl_ucp_sendrecv.h"
+
+#include <inttypes.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
 
 /* TODO: add as parameters */
 #define MSG_MEDIUM 66000
 #define NP_THRESH 32
+
+typedef enum {
+    UCC_TL_UCP_A2A_TRACE_START,
+    UCC_TL_UCP_A2A_TRACE_RECV_POST,
+    UCC_TL_UCP_A2A_TRACE_SEND_POST,
+    UCC_TL_UCP_A2A_TRACE_PROGRESS,
+    UCC_TL_UCP_A2A_TRACE_DONE
+} ucc_tl_ucp_a2a_trace_event_type_t;
+
+typedef struct {
+    uint64_t ns;
+    uint32_t send_posted;
+    uint32_t send_completed;
+    uint32_t recv_posted;
+    uint32_t recv_completed;
+    uint32_t step;
+    uint32_t peer;
+    uint8_t  type;
+} ucc_tl_ucp_a2a_trace_event_t;
+
+typedef struct {
+    ucc_tl_ucp_a2a_trace_event_t *events;
+    uint32_t                      count;
+    uint32_t                      capacity;
+    uint32_t                      sequence;
+    int                           overflow;
+} ucc_tl_ucp_a2a_trace_state_t;
+
+#define UCC_TL_UCP_A2A_TRACE_STATE(_task)                                     \
+    ((ucc_tl_ucp_a2a_trace_state_t *)(_task)->plugin_data)
+
+static uint64_t ucc_tl_ucp_a2a_trace_now_ns(void)
+{
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ((uint64_t)ts.tv_sec * 1000000000ull) + (uint64_t)ts.tv_nsec;
+}
+
+static void
+ucc_tl_ucp_a2a_trace_record(ucc_tl_ucp_task_t *task,
+                            ucc_tl_ucp_a2a_trace_event_type_t type,
+                            uint32_t step, uint32_t peer)
+{
+    ucc_tl_ucp_a2a_trace_state_t *state = UCC_TL_UCP_A2A_TRACE_STATE(task);
+    ucc_tl_ucp_a2a_trace_event_t *event;
+
+    if (!state->events) {
+        return;
+    }
+    if (state->count == state->capacity) {
+        state->overflow = 1;
+        return;
+    }
+
+    event                 = &state->events[state->count++];
+    event->ns             = ucc_tl_ucp_a2a_trace_now_ns();
+    event->send_posted    = task->tagged.send_posted;
+    event->send_completed = task->tagged.send_completed;
+    event->recv_posted    = task->tagged.recv_posted;
+    event->recv_completed = task->tagged.recv_completed;
+    event->step           = step;
+    event->peer           = peer;
+    event->type           = type;
+}
+
+static void ucc_tl_ucp_a2a_trace_progress_change(
+    ucc_tl_ucp_task_t *task, uint32_t send_completed,
+    uint32_t recv_completed)
+{
+    if (task->tagged.send_completed != send_completed ||
+        task->tagged.recv_completed != recv_completed) {
+        ucc_tl_ucp_a2a_trace_record(task, UCC_TL_UCP_A2A_TRACE_PROGRESS,
+                                    UINT32_MAX, UINT32_MAX);
+    }
+}
+
+static const char *ucc_tl_ucp_a2a_trace_event_name(uint8_t type)
+{
+    static const char *names[] = {"start", "recv_post", "send_post",
+                                  "progress", "done"};
+
+    return type < sizeof(names) / sizeof(names[0]) ? names[type] : "unknown";
+}
+
+static ucc_status_t
+ucc_tl_ucp_alltoall_pairwise_trace_finalize(ucc_coll_task_t *coll_task)
+{
+    ucc_tl_ucp_task_t *task = ucc_derived_of(coll_task, ucc_tl_ucp_task_t);
+    ucc_tl_ucp_team_t *team = TASK_TEAM(task);
+    ucc_tl_ucp_a2a_trace_state_t *state = UCC_TL_UCP_A2A_TRACE_STATE(task);
+    const char *schedule =
+        team->cfg.alltoall_pairwise_schedule ==
+                UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY
+            ? "ring_topology"
+            : "ring";
+    ucc_rank_t rank = UCC_TL_TEAM_RANK(team);
+    uint32_t i;
+
+    for (i = 0; i < state->count; i++) {
+        ucc_tl_ucp_a2a_trace_event_t *event = &state->events[i];
+        fprintf(stdout,
+                "A2A_PHASE_TRACE rank=%u schedule=%s sequence=%u event=%s "
+                "ns=%" PRIu64 " step=%u peer=%u sp=%u sc=%u rp=%u rc=%u\n",
+                rank, schedule, state->sequence,
+                ucc_tl_ucp_a2a_trace_event_name(event->type), event->ns,
+                event->step, event->peer, event->send_posted,
+                event->send_completed, event->recv_posted,
+                event->recv_completed);
+    }
+    fprintf(stdout,
+            "A2A_PHASE_TRACE_END rank=%u schedule=%s sequence=%u events=%u "
+            "overflow=%d\n",
+            rank, schedule, state->sequence, state->count, state->overflow);
+    fflush(stdout);
+    ucc_free(state->events);
+    state->events = NULL;
+    return ucc_tl_ucp_coll_finalize(coll_task);
+}
 
 static inline ucc_rank_t get_recv_peer(ucc_rank_t rank, ucc_rank_t size,
                                        ucc_rank_t step)
@@ -87,23 +212,35 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
     while ((task->tagged.send_posted < gsize ||
             task->tagged.recv_posted < gsize) &&
            (polls++ < task->n_polls)) {
+        uint32_t send_completed = task->tagged.send_completed;
+        uint32_t recv_completed = task->tagged.recv_completed;
         ucp_worker_progress(UCC_TL_UCP_TEAM_CTX(team)->worker.ucp_worker);
+        ucc_tl_ucp_a2a_trace_progress_change(task, send_completed,
+                                             recv_completed);
         while ((task->tagged.recv_posted < gsize) &&
                ((task->tagged.recv_posted - task->tagged.recv_completed) <
                 nreqs)) {
-            peer = get_peer(team, grank, gsize, task->tagged.recv_posted, 0);
+            uint32_t step = task->tagged.recv_posted;
+            peer = get_peer(team, grank, gsize, step, 0);
             UCPCHECK_GOTO(ucc_tl_ucp_recv_nb((void *)(rbuf + peer * data_size),
                                              data_size, rmem, peer, team, task),
                           task, out);
+            ucc_tl_ucp_a2a_trace_record(task,
+                                        UCC_TL_UCP_A2A_TRACE_RECV_POST,
+                                        step, peer);
             polls = 0;
         }
         while ((task->tagged.send_posted < gsize) &&
                ((task->tagged.send_posted - task->tagged.send_completed) <
                 nreqs)) {
-            peer = get_peer(team, grank, gsize, task->tagged.send_posted, 1);
+            uint32_t step = task->tagged.send_posted;
+            peer = get_peer(team, grank, gsize, step, 1);
             UCPCHECK_GOTO(ucc_tl_ucp_send_nb((void *)(sbuf + peer * data_size),
                                              data_size, smem, peer, team, task),
                           task, out);
+            ucc_tl_ucp_a2a_trace_record(task,
+                                        UCC_TL_UCP_A2A_TRACE_SEND_POST,
+                                        step, peer);
             polls = 0;
         }
     }
@@ -112,9 +249,17 @@ void ucc_tl_ucp_alltoall_pairwise_progress(ucc_coll_task_t *coll_task)
         return;
     }
 
-    task->super.status = ucc_tl_ucp_test(task);
+    {
+        uint32_t send_completed = task->tagged.send_completed;
+        uint32_t recv_completed = task->tagged.recv_completed;
+        task->super.status = ucc_tl_ucp_test(task);
+        ucc_tl_ucp_a2a_trace_progress_change(task, send_completed,
+                                             recv_completed);
+    }
 out:
     if (task->super.status != UCC_INPROGRESS) {
+        ucc_tl_ucp_a2a_trace_record(task, UCC_TL_UCP_A2A_TRACE_DONE,
+                                    UINT32_MAX, UINT32_MAX);
         UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task,
                                          "ucp_alltoall_pairwise_done", 0);
     }
@@ -127,6 +272,8 @@ ucc_status_t ucc_tl_ucp_alltoall_pairwise_start(ucc_coll_task_t *coll_task)
 
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task, "ucp_alltoall_pairwise_start", 0);
     ucc_tl_ucp_task_reset(task, UCC_INPROGRESS);
+    ucc_tl_ucp_a2a_trace_record(task, UCC_TL_UCP_A2A_TRACE_START,
+                                UINT32_MAX, UINT32_MAX);
 
     return ucc_progress_queue_enqueue(UCC_TL_CORE_CTX(team)->pq, &task->super);
 }
@@ -139,6 +286,27 @@ ucc_status_t ucc_tl_ucp_alltoall_pairwise_init_common(ucc_tl_ucp_task_t *task)
 
     task->super.post     = ucc_tl_ucp_alltoall_pairwise_start;
     task->super.progress = ucc_tl_ucp_alltoall_pairwise_progress;
+
+    {
+        ucc_tl_ucp_a2a_trace_state_t *state = UCC_TL_UCP_A2A_TRACE_STATE(task);
+        uint32_t sequence = team->alltoall_pairwise_trace_sequence++;
+
+        memset(state, 0, sizeof(*state));
+        state->sequence = sequence;
+        if (team->cfg.alltoall_pairwise_trace &&
+            sequence >= team->cfg.alltoall_pairwise_trace_skip &&
+            sequence - team->cfg.alltoall_pairwise_trace_skip <
+                team->cfg.alltoall_pairwise_trace_count) {
+            state->capacity = 6 * UCC_TL_TEAM_SIZE(team) + 16;
+            state->events = ucc_calloc(state->capacity,
+                                       sizeof(*state->events),
+                                       "alltoall_pairwise_trace");
+            if (state->events) {
+                task->super.finalize =
+                    ucc_tl_ucp_alltoall_pairwise_trace_finalize;
+            }
+        }
+    }
 
     task->n_polls = ucc_max(1, task->n_polls);
     if (UCC_TL_UCP_TEAM_CTX(team)->cfg.pre_reg_mem) {

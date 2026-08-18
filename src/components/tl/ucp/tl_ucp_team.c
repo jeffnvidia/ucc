@@ -178,6 +178,7 @@ UCC_CLASS_INIT_FUNC(ucc_tl_ucp_team_t, ucc_base_context_t *tl_context,
     self->alltoall_topo_ring.rank_order  = NULL;
     self->alltoall_topo_ring.rank_labels = NULL;
     self->alltoall_topo_ring.enabled     = 0;
+    self->alltoall_pairwise_trace_sequence = 0;
     self->opt_radix       = UCC_UUNITS_AUTO_RADIX;
     self->opt_radix_host  = UCC_UUNITS_AUTO_RADIX;
     self->cuda_ring       = NULL;

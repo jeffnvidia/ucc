@@ -82,6 +82,9 @@ typedef struct ucc_tl_ucp_lib_config {
     unsigned long                      alltoall_pairwise_num_posts;
     ucc_tl_ucp_alltoall_pairwise_schedule_t
                                        alltoall_pairwise_schedule;
+    int                                alltoall_pairwise_trace;
+    uint32_t                           alltoall_pairwise_trace_skip;
+    uint32_t                           alltoall_pairwise_trace_count;
     unsigned long                      alltoallv_pairwise_num_posts;
     unsigned long                      allgather_batched_num_posts;
     ucc_pipeline_params_t              allreduce_sra_kn_pipeline;
@@ -191,6 +194,7 @@ typedef struct ucc_tl_ucp_team {
     ucc_topo_t                *topo;
     ucc_ep_map_t               ctx_map;
     ucc_tl_ucp_alltoall_topo_ring_t alltoall_topo_ring;
+    uint32_t                   alltoall_pairwise_trace_sequence;
     ucc_rank_t                 opt_radix; /* generic opt radix */
     ucc_rank_t                 opt_radix_host; /* host specific opt radix */
     ucc_ring_pattern_t         *cuda_ring;
