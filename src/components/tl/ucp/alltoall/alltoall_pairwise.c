@@ -14,6 +14,7 @@
 #include "tl_ucp_sendrecv.h"
 
 #include <inttypes.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -118,11 +119,26 @@ ucc_tl_ucp_alltoall_pairwise_trace_finalize(ucc_coll_task_t *coll_task)
             ? "ring_topology"
             : "ring";
     ucc_rank_t rank = UCC_TL_TEAM_RANK(team);
+    char trace_path[PATH_MAX];
+    FILE *output = stdout;
     uint32_t i;
+
+    if (team->cfg.alltoall_pairwise_trace_dir &&
+        team->cfg.alltoall_pairwise_trace_dir[0] != '\0') {
+        snprintf(trace_path, sizeof(trace_path), "%s/rank_%06u.log",
+                 team->cfg.alltoall_pairwise_trace_dir, rank);
+        output = fopen(trace_path, "a");
+        if (!output) {
+            tl_warn(UCC_TL_UCP_TEAM_LIB(team),
+                    "failed to open alltoall trace file %s; using stdout",
+                    trace_path);
+            output = stdout;
+        }
+    }
 
     for (i = 0; i < state->count; i++) {
         ucc_tl_ucp_a2a_trace_event_t *event = &state->events[i];
-        fprintf(stdout,
+        fprintf(output,
                 "A2A_PHASE_TRACE rank=%u schedule=%s sequence=%u event=%s "
                 "ns=%" PRIu64 " step=%u peer=%u sp=%u sc=%u rp=%u rc=%u\n",
                 rank, schedule, state->sequence,
@@ -131,11 +147,15 @@ ucc_tl_ucp_alltoall_pairwise_trace_finalize(ucc_coll_task_t *coll_task)
                 event->send_completed, event->recv_posted,
                 event->recv_completed);
     }
-    fprintf(stdout,
+    fprintf(output,
             "A2A_PHASE_TRACE_END rank=%u schedule=%s sequence=%u events=%u "
             "overflow=%d\n",
             rank, schedule, state->sequence, state->count, state->overflow);
-    fflush(stdout);
+    if (output == stdout) {
+        fflush(output);
+    } else {
+        fclose(output);
+    }
     ucc_free(state->events);
     state->events = NULL;
     return ucc_tl_ucp_coll_finalize(coll_task);

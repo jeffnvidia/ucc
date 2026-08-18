@@ -85,6 +85,7 @@ typedef struct ucc_tl_ucp_lib_config {
     int                                alltoall_pairwise_trace;
     uint32_t                           alltoall_pairwise_trace_skip;
     uint32_t                           alltoall_pairwise_trace_count;
+    char                              *alltoall_pairwise_trace_dir;
     unsigned long                      alltoallv_pairwise_num_posts;
     unsigned long                      allgather_batched_num_posts;
     ucc_pipeline_params_t              allreduce_sra_kn_pipeline;

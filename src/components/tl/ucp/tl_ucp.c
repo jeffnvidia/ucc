@@ -94,6 +94,12 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
      ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_trace_count),
      UCC_CONFIG_TYPE_UINT},
 
+    {"ALLTOALL_PAIRWISE_TRACE_DIR", "",
+     "Directory for one bounded pairwise alltoall trace file per team rank; "
+     "an empty value writes to standard output",
+     ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_trace_dir),
+     UCC_CONFIG_TYPE_STRING},
+
     {"ALLTOALLV_PAIRWISE_NUM_POSTS", "auto",
      "Maximum number of outstanding send and receive messages in alltoallv "
      "pairwise algorithm",
