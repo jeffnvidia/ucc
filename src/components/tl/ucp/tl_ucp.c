@@ -58,6 +58,12 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
      ucc_offsetof(ucc_tl_ucp_lib_config_t, allgather_batched_num_posts),
      UCC_CONFIG_TYPE_ULUNITS},
 
+    {"ALLGATHER_WINDOW_MAX_BYTES", "auto",
+     "Maximum number of outstanding payload bytes in each direction in "
+     "allgather window algorithm",
+     ucc_offsetof(ucc_tl_ucp_lib_config_t, allgather_window_max_bytes),
+     UCC_CONFIG_TYPE_MEMUNITS},
+
     {"ALLTOALL_PAIRWISE_NUM_POSTS", "auto",
      "Maximum number of outstanding send and receive messages in alltoall "
      "pairwise algorithm",

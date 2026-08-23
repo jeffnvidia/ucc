@@ -58,6 +58,28 @@ static unsigned long get_num_reqs(const ucc_tl_ucp_team_t *team)
     return reqs;
 }
 
+static unsigned long
+get_window_num_reqs(const ucc_base_coll_args_t *coll_args,
+                    const ucc_tl_ucp_team_t    *team)
+{
+    ucc_rank_t     max_reqs  = UCC_TL_TEAM_SIZE(team) - 1;
+    size_t         count     = coll_args->args.dst.info.count;
+    ucc_datatype_t dt       = coll_args->args.dst.info.datatype;
+    size_t         data_size =
+        (count / UCC_TL_TEAM_SIZE(team)) * ucc_dt_size(dt);
+    size_t         max_bytes =
+        UCC_TL_UCP_TEAM_LIB(team)->cfg.allgather_window_max_bytes;
+    unsigned long reqs;
+
+    if (data_size == 0 || max_bytes == UCC_MEMUNITS_AUTO) {
+        return max_reqs;
+    }
+
+    reqs = max_bytes / data_size;
+    reqs = ucc_max(reqs, 1ul);
+    return ucc_min(reqs, (unsigned long)max_reqs);
+}
+
 ucc_status_t ucc_tl_ucp_allgather_batched_init(
     ucc_base_coll_args_t *coll_args, ucc_base_team_t *team,
     ucc_coll_task_t **task_h, unsigned long nreqs)
@@ -96,6 +118,25 @@ ucc_tl_ucp_allgather_linear_batched_init(ucc_base_coll_args_t *coll_args,
     return ucc_tl_ucp_allgather_batched_init(
         coll_args, team, task_h,
         get_num_reqs(ucc_derived_of(team, ucc_tl_ucp_team_t)));
+}
+
+ucc_status_t
+ucc_tl_ucp_allgather_window_init(ucc_base_coll_args_t *coll_args,
+                                 ucc_base_team_t      *team,
+                                 ucc_coll_task_t     **task_h)
+{
+    ucc_tl_ucp_team_t *tl_team = ucc_derived_of(team, ucc_tl_ucp_team_t);
+    unsigned long      nreqs    = get_window_num_reqs(coll_args, tl_team);
+    size_t             data_size =
+        (coll_args->args.dst.info.count / UCC_TL_TEAM_SIZE(tl_team)) *
+        ucc_dt_size(coll_args->args.dst.info.datatype);
+
+    tl_debug(UCC_TL_TEAM_LIB(tl_team),
+             "allgather window: shard_bytes %zu, max_bytes %zu, nreqs %lu",
+             data_size,
+             UCC_TL_UCP_TEAM_LIB(tl_team)->cfg.allgather_window_max_bytes,
+             nreqs);
+    return ucc_tl_ucp_allgather_batched_init(coll_args, team, task_h, nreqs);
 }
 
 /* Linear One-Shot version of allgather */

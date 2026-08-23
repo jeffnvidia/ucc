@@ -16,6 +16,7 @@ enum {
     UCC_TL_UCP_ALLGATHER_ALG_SPARBIT,
     UCC_TL_UCP_ALLGATHER_ALG_LINEAR,
     UCC_TL_UCP_ALLGATHER_ALG_LINEAR_BATCHED,
+    UCC_TL_UCP_ALLGATHER_ALG_WINDOW,
     UCC_TL_UCP_ALLGATHER_ALG_LAST
 };
 
@@ -90,6 +91,12 @@ ucc_status_t
 ucc_tl_ucp_allgather_linear_batched_init(ucc_base_coll_args_t *coll_args,
                                          ucc_base_team_t      *team,
                                          ucc_coll_task_t     **task_h);
+
+/* Linear continuously refilled window capped by outstanding payload bytes */
+ucc_status_t
+ucc_tl_ucp_allgather_window_init(ucc_base_coll_args_t *coll_args,
+                                 ucc_base_team_t      *team,
+                                 ucc_coll_task_t     **task_h);
 
 /* Uses allgather_kn_radix from config */
 ucc_status_t ucc_tl_ucp_allgather_knomial_init(ucc_base_coll_args_t *coll_args,
