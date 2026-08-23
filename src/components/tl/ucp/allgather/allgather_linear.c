@@ -135,32 +135,32 @@ void ucc_tl_ucp_allgather_linear_progress(ucc_coll_task_t *coll_task)
     ucc_status_t          status;
 
     /*
-     * One-shot fast path. Post each receive immediately before the matching
-     * send: at step i rank r sends to r + 1 + i and receives from r - 1 - i.
-     * Every rank posts the receive first at a given step, and the receive/send
-     * peer sequences are complementary across ranks. This minimizes
-     * unexpected-message matching while sends start progressing as the
-     * remaining pairs are posted. It also avoids an otherwise empty
-     * worker-progress call before the first requests are submitted.
+     * One-shot fast path. Preserve the generic path's send-first posting order
+     * so repeated sends from the same source region establish/reuse their
+     * memory registration before the distinct receive regions are registered.
+     * Increment/decrement with wraparound avoids two divisions per peer, and
+     * the fast path also avoids an empty worker-progress call before the first
+     * requests are submitted.
      */
     if ((nreqs == tsize - 1) && (task->tagged.send_posted == 0) &&
         (task->tagged.recv_posted == 0)) {
-        recv_peer = (trank == 0) ? tsize - 1 : trank - 1;
         send_peer = (trank == tsize - 1) ? 0 : trank + 1;
+        for (step = 0; step < tsize - 1; step++) {
+            UCPCHECK_GOTO(
+                ucc_tl_ucp_send_nb(tmpsend, data_size, smem, send_peer, team,
+                                   task),
+                task, err);
+            send_peer = (send_peer == tsize - 1) ? 0 : send_peer + 1;
+        }
+
+        recv_peer = (trank == 0) ? tsize - 1 : trank - 1;
         for (step = 0; step < tsize - 1; step++) {
             tmprecv = PTR_OFFSET(rbuf, recv_peer * data_size);
             UCPCHECK_GOTO(
                 ucc_tl_ucp_recv_nb(tmprecv, data_size, rmem, recv_peer, team,
                                    task),
                 task, err);
-
-            UCPCHECK_GOTO(
-                ucc_tl_ucp_send_nb(tmpsend, data_size, smem, send_peer, team,
-                                   task),
-                task, err);
-
             recv_peer = (recv_peer == 0) ? tsize - 1 : recv_peer - 1;
-            send_peer = (send_peer == tsize - 1) ? 0 : send_peer + 1;
         }
     }
 
