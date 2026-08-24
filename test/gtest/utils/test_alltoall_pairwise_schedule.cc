@@ -126,3 +126,51 @@ TEST(alltoall_pairwise_schedule, every_peer_and_reciprocal_receive)
         }
     }
 }
+
+TEST(alltoall_pairwise_schedule, staggered_flattens_local_steps)
+{
+    for (ucc_rank_t nnodes : {8, 28}) {
+        const ucc_rank_t ppn = 4;
+        const ucc_rank_t size = nnodes * ppn;
+        std::vector<ucc_rank_t> rank_order(size);
+        std::vector<ucc_rank_t> rank_labels(size);
+        std::vector<ucc_ep_map_t> node_maps(nnodes);
+        ucc_rank_t total_local = 0;
+        ucc_rank_t peak_local = 0;
+
+        for (ucc_rank_t node = 0; node < nnodes; node++) {
+            node_maps[node].type           = UCC_EP_MAP_STRIDED;
+            node_maps[node].ep_num         = ppn;
+            node_maps[node].strided.start  = node * ppn;
+            node_maps[node].strided.stride = 1;
+        }
+        ASSERT_EQ(UCC_OK, ucc_tl_ucp_alltoall_topo_staggered_build_map(
+                              node_maps.data(), size, nnodes, ppn,
+                              rank_order.data(), rank_labels.data()));
+
+        for (ucc_rank_t step = 1; step < size; step++) {
+            ucc_rank_t step_local = 0;
+            for (ucc_rank_t rank = 0; rank < size; rank++) {
+                ucc_rank_t peer = ucc_tl_ucp_alltoall_topo_ring_peer(
+                    rank_order.data(), rank_labels.data(), rank, size, step,
+                    1);
+                step_local += rank / ppn == peer / ppn;
+            }
+            total_local += step_local;
+            peak_local = ucc_max(peak_local, step_local);
+        }
+
+        EXPECT_EQ(nnodes * ppn * (ppn - 1), total_local);
+        EXPECT_LE(peak_local, 6);
+        EXPECT_LT(peak_local, size);
+        for (ucc_rank_t rank = 0; rank < size; rank++) {
+            std::vector<int> seen(size, 0);
+            for (ucc_rank_t step = 0; step < size; step++) {
+                ucc_rank_t peer = ucc_tl_ucp_alltoall_topo_ring_peer(
+                    rank_order.data(), rank_labels.data(), rank, size, step,
+                    1);
+                EXPECT_EQ(0, seen[peer]++);
+            }
+        }
+    }
+}

@@ -325,7 +325,9 @@ UCC_CLASS_INIT_FUNC(ucc_tl_ucp_context_t,
                              UCC_CONTEXT_PARAM_FIELD_OOB)) ||
                            lib->cfg.use_topo == UCC_YES ||
                            lib->cfg.alltoall_pairwise_schedule ==
-                               UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY)
+                               UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY ||
+                           lib->cfg.alltoall_pairwise_schedule ==
+                               UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY_STAGGERED)
                               ? 1
                               : 0;
 

@@ -54,9 +54,12 @@ static void ucc_tl_ucp_init_alltoall_topo_ring(ucc_tl_ucp_team_t *team)
     ucc_rank_t  nnodes, ppn, size, node;
     ucc_status_t status;
     int          n_nodes;
+    int          staggered;
 
-    if (team->cfg.alltoall_pairwise_schedule !=
-        UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY) {
+    staggered = team->cfg.alltoall_pairwise_schedule ==
+                UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY_STAGGERED;
+    if (!staggered && team->cfg.alltoall_pairwise_schedule !=
+                          UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY) {
         return;
     }
     if (!team->topo || ucc_topo_is_single_node(team->topo) ||
@@ -113,10 +116,17 @@ static void ucc_tl_ucp_init_alltoall_topo_ring(ucc_tl_ucp_team_t *team)
         node_maps[node] = nodes[node].map;
     }
 
-    status = ucc_tl_ucp_alltoall_topo_ring_build_map(
-        node_maps, size, nnodes, ppn,
-        team->alltoall_topo_ring.rank_order,
-        team->alltoall_topo_ring.rank_labels);
+    if (staggered) {
+        status = ucc_tl_ucp_alltoall_topo_staggered_build_map(
+            node_maps, size, nnodes, ppn,
+            team->alltoall_topo_ring.rank_order,
+            team->alltoall_topo_ring.rank_labels);
+    } else {
+        status = ucc_tl_ucp_alltoall_topo_ring_build_map(
+            node_maps, size, nnodes, ppn,
+            team->alltoall_topo_ring.rank_order,
+            team->alltoall_topo_ring.rank_labels);
+    }
     if (status != UCC_OK) {
         tl_debug(UCC_TL_UCP_TEAM_LIB(team),
                  "alltoall topology ring unavailable: invalid rank "
@@ -126,8 +136,8 @@ static void ucc_tl_ucp_init_alltoall_topo_ring(ucc_tl_ucp_team_t *team)
 
     team->alltoall_topo_ring.enabled = 1;
     tl_debug(UCC_TL_UCP_TEAM_LIB(team),
-             "alltoall topology ring enabled: size %u nnodes %u ppn %u",
-             size, nnodes, ppn);
+             "alltoall topology ring enabled: size %u nnodes %u ppn %u "
+             "staggered %d", size, nnodes, ppn, staggered);
 
 out:
     ucc_free(node_maps);

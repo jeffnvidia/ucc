@@ -198,11 +198,14 @@ ucc_tl_ucp_alltoall_pairwise_trace_finalize(ucc_coll_task_t *coll_task)
     ucc_tl_ucp_task_t *task = ucc_derived_of(coll_task, ucc_tl_ucp_task_t);
     ucc_tl_ucp_team_t *team = TASK_TEAM(task);
     ucc_tl_ucp_a2a_trace_state_t *state = UCC_TL_UCP_A2A_TRACE_STATE(task);
-    const char *schedule =
-        team->cfg.alltoall_pairwise_schedule ==
-                UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY
-            ? "ring_topology"
-            : "ring";
+    const char *schedule = "ring";
+    if (team->cfg.alltoall_pairwise_schedule ==
+        UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY) {
+        schedule = "ring_topology";
+    } else if (team->cfg.alltoall_pairwise_schedule ==
+               UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY_STAGGERED) {
+        schedule = "ring_topology_staggered";
+    }
     ucc_rank_t rank = UCC_TL_TEAM_RANK(team);
     char trace_path[PATH_MAX];
     FILE *output = stdout;
@@ -313,8 +316,10 @@ static inline ucc_rank_t
 get_peer(const ucc_tl_ucp_team_t *team, ucc_rank_t rank, ucc_rank_t size,
          ucc_rank_t step, int is_send)
 {
-    if (team->cfg.alltoall_pairwise_schedule ==
-            UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY &&
+    if ((team->cfg.alltoall_pairwise_schedule ==
+             UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY ||
+         team->cfg.alltoall_pairwise_schedule ==
+             UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY_STAGGERED) &&
         team->alltoall_topo_ring.enabled) {
         return ucc_tl_ucp_alltoall_topo_ring_peer(
             team->alltoall_topo_ring.rank_order,

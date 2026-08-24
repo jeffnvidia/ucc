@@ -35,6 +35,8 @@ static const char *alltoall_pairwise_schedules[] = {
     [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING] = "ring",
     [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY] =
         "ring_topology",
+    [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY_STAGGERED] =
+        "ring_topology_staggered",
     [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_LAST] = NULL
 };
 
@@ -74,7 +76,9 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
     {"ALLTOALL_PAIRWISE_SCHEDULE", "ring",
      "Peer ordering for alltoall pairwise algorithm\n"
      "ring          - directed ring over team ranks\n"
-     "ring_topology - directed ring over node-interleaved rank labels",
+     "ring_topology - directed ring over node-interleaved rank labels\n"
+     "ring_topology_staggered - topology ring with node-local exchanges "
+     "spread across steps",
      ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_schedule),
      UCC_CONFIG_TYPE_ENUM(alltoall_pairwise_schedules)},
 
