@@ -47,6 +47,8 @@ typedef struct {
     uint64_t worker_progress_return_2_3_calls;
     uint64_t worker_progress_return_4_7_calls;
     uint64_t worker_progress_return_8_plus_calls;
+    uint64_t worker_progress_ns;
+    ucp_a2a_diag_snapshot_t ucx_diag;
     uint8_t  type;
 } ucc_tl_ucp_a2a_trace_event_t;
 
@@ -64,6 +66,7 @@ typedef struct {
     uint64_t                      worker_progress_return_2_3_calls;
     uint64_t                      worker_progress_return_4_7_calls;
     uint64_t                      worker_progress_return_8_plus_calls;
+    uint64_t                      worker_progress_ns;
 } ucc_tl_ucp_a2a_trace_state_t;
 
 #define UCC_TL_UCP_A2A_TRACE_STATE(_task)                                     \
@@ -114,7 +117,11 @@ ucc_tl_ucp_a2a_trace_record(ucc_tl_ucp_task_t *task,
         state->worker_progress_return_4_7_calls;
     event->worker_progress_return_8_plus_calls =
         state->worker_progress_return_8_plus_calls;
-    event->type           = type;
+    event->worker_progress_ns = state->worker_progress_ns;
+    ucp_worker_a2a_diag_snapshot(
+        UCC_TL_UCP_TEAM_CTX(TASK_TEAM(task))->worker.ucp_worker, 0,
+        &event->ucx_diag);
+    event->type = type;
 }
 
 static void ucc_tl_ucp_a2a_trace_progress_change(
@@ -133,11 +140,15 @@ ucc_tl_ucp_a2a_trace_worker_progress(ucc_tl_ucp_task_t *task,
                                      ucc_tl_ucp_team_t *team)
 {
     ucc_tl_ucp_a2a_trace_state_t *state = UCC_TL_UCP_A2A_TRACE_STATE(task);
+    uint64_t start_ns;
     unsigned progress_count;
 
+    start_ns = state->events ? ucc_tl_ucp_a2a_trace_now_ns() : 0;
     progress_count = ucp_worker_progress(
         UCC_TL_UCP_TEAM_CTX(team)->worker.ucp_worker);
     if (state->events) {
+        state->worker_progress_ns +=
+            ucc_tl_ucp_a2a_trace_now_ns() - start_ns;
         state->worker_progress_calls++;
         state->worker_progress_returns += progress_count;
         if (progress_count == 0) {
@@ -217,7 +228,15 @@ ucc_tl_ucp_alltoall_pairwise_trace_finalize(ucc_coll_task_t *coll_task)
                 "ns=%" PRIu64 " step=%u peer=%u sp=%u sc=%u rp=%u rc=%u "
                 "tpc=%" PRIu64 " wpc=%" PRIu64 " wpr=%" PRIu64 " "
                 "wpz=%" PRIu64 " wp1=%" PRIu64 " wp23=%" PRIu64 " "
-                "wp47=%" PRIu64 " wp8p=%" PRIu64 "\n",
+                "wp47=%" PRIu64 " wp8p=%" PRIu64 " wpns=%" PRIu64 " "
+                "rcpc=%" PRIu64 " rcpns=%" PRIu64 " rcpz=%" PRIu64 " "
+                "rxp=%" PRIu64 " rxc=%" PRIu64 " rxens=%" PRIu64 " "
+                "rxcns=%" PRIu64 " txp=%" PRIu64 " txc=%" PRIu64 " "
+                "txens=%" PRIu64 " txcns=%" PRIu64 " txops=%" PRIu64 " "
+                "txget=%" PRIu64 " txam=%" PRIu64 " txsend=%" PRIu64 " "
+                "txother=%" PRIu64 " rts=%" PRIu64 " ats=%" PRIu64 " "
+                "rtr=%" PRIu64 " rdata=%" PRIu64 " atp=%" PRIu64 " "
+                "amother=%" PRIu64 "\n",
                 rank, schedule, state->sequence,
                 ucc_tl_ucp_a2a_trace_event_name(event->type), event->ns,
                 event->step, event->peer, event->send_posted,
@@ -229,7 +248,26 @@ ucc_tl_ucp_alltoall_pairwise_trace_finalize(ucc_coll_task_t *coll_task)
                 event->worker_progress_return_1_calls,
                 event->worker_progress_return_2_3_calls,
                 event->worker_progress_return_4_7_calls,
-                event->worker_progress_return_8_plus_calls);
+                event->worker_progress_return_8_plus_calls,
+                event->worker_progress_ns, event->ucx_diag.rc_progress_calls,
+                event->ucx_diag.rc_progress_ns,
+                event->ucx_diag.rc_progress_zero_calls,
+                event->ucx_diag.rc_rx_poll_calls,
+                event->ucx_diag.rc_rx_cqes,
+                event->ucx_diag.rc_rx_empty_ns,
+                event->ucx_diag.rc_rx_cqe_ns,
+                event->ucx_diag.rc_tx_poll_calls,
+                event->ucx_diag.rc_tx_cqes,
+                event->ucx_diag.rc_tx_empty_ns,
+                event->ucx_diag.rc_tx_cqe_ns,
+                event->ucx_diag.rc_tx_ops,
+                event->ucx_diag.rc_tx_get_zcopy_ops,
+                event->ucx_diag.rc_tx_am_zcopy_ops,
+                event->ucx_diag.rc_tx_send_ops,
+                event->ucx_diag.rc_tx_other_ops,
+                event->ucx_diag.rc_am_rts, event->ucx_diag.rc_am_ats,
+                event->ucx_diag.rc_am_rtr, event->ucx_diag.rc_am_data,
+                event->ucx_diag.rc_am_atp, event->ucx_diag.rc_am_other);
     }
     fprintf(output,
             "A2A_PHASE_TRACE_END rank=%u schedule=%s sequence=%u events=%u "
@@ -392,8 +430,14 @@ ucc_status_t ucc_tl_ucp_alltoall_pairwise_start(ucc_coll_task_t *coll_task)
 {
     ucc_tl_ucp_task_t *task = ucc_derived_of(coll_task, ucc_tl_ucp_task_t);
     ucc_tl_ucp_team_t *team = TASK_TEAM(task);
+    ucc_tl_ucp_a2a_trace_state_t *state = UCC_TL_UCP_A2A_TRACE_STATE(task);
+    ucp_a2a_diag_snapshot_t snapshot;
 
     UCC_TL_UCP_PROFILE_REQUEST_EVENT(coll_task, "ucp_alltoall_pairwise_start", 0);
+    if (state->events) {
+        ucp_worker_a2a_diag_snapshot(
+            UCC_TL_UCP_TEAM_CTX(team)->worker.ucp_worker, 1, &snapshot);
+    }
     ucc_tl_ucp_task_reset(task, UCC_INPROGRESS);
     ucc_tl_ucp_a2a_trace_record(task, UCC_TL_UCP_A2A_TRACE_START,
                                 UINT32_MAX, UINT32_MAX);
