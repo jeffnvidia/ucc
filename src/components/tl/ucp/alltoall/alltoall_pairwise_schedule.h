@@ -136,10 +136,10 @@ static inline ucc_status_t ucc_tl_ucp_alltoall_topo_staggered_build_map(
         }
     }
 
-    positions = ucc_malloc(size * sizeof(*positions),
-                           "alltoall_topo_staggered_positions");
-    histogram = ucc_malloc(size * sizeof(*histogram),
-                           "alltoall_topo_staggered_histogram");
+    positions = (ucc_rank_t *)ucc_malloc(
+        size * sizeof(*positions), "alltoall_topo_staggered_positions");
+    histogram = (ucc_rank_t *)ucc_malloc(
+        size * sizeof(*histogram), "alltoall_topo_staggered_histogram");
     if (!positions || !histogram) {
         status = UCC_ERR_NO_MEMORY;
         goto out;
