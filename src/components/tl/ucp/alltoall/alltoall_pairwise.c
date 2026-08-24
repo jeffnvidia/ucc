@@ -41,6 +41,12 @@ typedef struct {
     uint32_t peer;
     uint64_t task_progress_calls;
     uint64_t worker_progress_calls;
+    uint64_t worker_progress_returns;
+    uint64_t worker_progress_zero_calls;
+    uint64_t worker_progress_return_1_calls;
+    uint64_t worker_progress_return_2_3_calls;
+    uint64_t worker_progress_return_4_7_calls;
+    uint64_t worker_progress_return_8_plus_calls;
     uint8_t  type;
 } ucc_tl_ucp_a2a_trace_event_t;
 
@@ -52,6 +58,12 @@ typedef struct {
     int                           overflow;
     uint64_t                      task_progress_calls;
     uint64_t                      worker_progress_calls;
+    uint64_t                      worker_progress_returns;
+    uint64_t                      worker_progress_zero_calls;
+    uint64_t                      worker_progress_return_1_calls;
+    uint64_t                      worker_progress_return_2_3_calls;
+    uint64_t                      worker_progress_return_4_7_calls;
+    uint64_t                      worker_progress_return_8_plus_calls;
 } ucc_tl_ucp_a2a_trace_state_t;
 
 #define UCC_TL_UCP_A2A_TRACE_STATE(_task)                                     \
@@ -91,6 +103,17 @@ ucc_tl_ucp_a2a_trace_record(ucc_tl_ucp_task_t *task,
     event->peer           = peer;
     event->task_progress_calls   = state->task_progress_calls;
     event->worker_progress_calls = state->worker_progress_calls;
+    event->worker_progress_returns = state->worker_progress_returns;
+    event->worker_progress_zero_calls =
+        state->worker_progress_zero_calls;
+    event->worker_progress_return_1_calls =
+        state->worker_progress_return_1_calls;
+    event->worker_progress_return_2_3_calls =
+        state->worker_progress_return_2_3_calls;
+    event->worker_progress_return_4_7_calls =
+        state->worker_progress_return_4_7_calls;
+    event->worker_progress_return_8_plus_calls =
+        state->worker_progress_return_8_plus_calls;
     event->type           = type;
 }
 
@@ -110,12 +133,26 @@ ucc_tl_ucp_a2a_trace_worker_progress(ucc_tl_ucp_task_t *task,
                                      ucc_tl_ucp_team_t *team)
 {
     ucc_tl_ucp_a2a_trace_state_t *state = UCC_TL_UCP_A2A_TRACE_STATE(task);
+    unsigned progress_count;
 
+    progress_count = ucp_worker_progress(
+        UCC_TL_UCP_TEAM_CTX(team)->worker.ucp_worker);
     if (state->events) {
         state->worker_progress_calls++;
+        state->worker_progress_returns += progress_count;
+        if (progress_count == 0) {
+            state->worker_progress_zero_calls++;
+        } else if (progress_count == 1) {
+            state->worker_progress_return_1_calls++;
+        } else if (progress_count <= 3) {
+            state->worker_progress_return_2_3_calls++;
+        } else if (progress_count <= 7) {
+            state->worker_progress_return_4_7_calls++;
+        } else {
+            state->worker_progress_return_8_plus_calls++;
+        }
     }
-    return ucp_worker_progress(
-        UCC_TL_UCP_TEAM_CTX(team)->worker.ucp_worker);
+    return progress_count;
 }
 
 static ucc_status_t
@@ -178,20 +215,40 @@ ucc_tl_ucp_alltoall_pairwise_trace_finalize(ucc_coll_task_t *coll_task)
         fprintf(output,
                 "A2A_PHASE_TRACE rank=%u schedule=%s sequence=%u event=%s "
                 "ns=%" PRIu64 " step=%u peer=%u sp=%u sc=%u rp=%u rc=%u "
-                "tpc=%" PRIu64 " wpc=%" PRIu64 "\n",
+                "tpc=%" PRIu64 " wpc=%" PRIu64 " wpr=%" PRIu64 " "
+                "wpz=%" PRIu64 " wp1=%" PRIu64 " wp23=%" PRIu64 " "
+                "wp47=%" PRIu64 " wp8p=%" PRIu64 "\n",
                 rank, schedule, state->sequence,
                 ucc_tl_ucp_a2a_trace_event_name(event->type), event->ns,
                 event->step, event->peer, event->send_posted,
                 event->send_completed, event->recv_posted,
                 event->recv_completed, event->task_progress_calls,
-                event->worker_progress_calls);
+                event->worker_progress_calls,
+                event->worker_progress_returns,
+                event->worker_progress_zero_calls,
+                event->worker_progress_return_1_calls,
+                event->worker_progress_return_2_3_calls,
+                event->worker_progress_return_4_7_calls,
+                event->worker_progress_return_8_plus_calls);
     }
     fprintf(output,
             "A2A_PHASE_TRACE_END rank=%u schedule=%s sequence=%u events=%u "
             "overflow=%d task_progress_calls=%" PRIu64 " "
-            "worker_progress_calls=%" PRIu64 "\n",
+            "worker_progress_calls=%" PRIu64 " "
+            "worker_progress_returns=%" PRIu64 " "
+            "worker_progress_zero_calls=%" PRIu64 " "
+            "worker_progress_return_1_calls=%" PRIu64 " "
+            "worker_progress_return_2_3_calls=%" PRIu64 " "
+            "worker_progress_return_4_7_calls=%" PRIu64 " "
+            "worker_progress_return_8_plus_calls=%" PRIu64 "\n",
             rank, schedule, state->sequence, state->count, state->overflow,
-            state->task_progress_calls, state->worker_progress_calls);
+            state->task_progress_calls, state->worker_progress_calls,
+            state->worker_progress_returns,
+            state->worker_progress_zero_calls,
+            state->worker_progress_return_1_calls,
+            state->worker_progress_return_2_3_calls,
+            state->worker_progress_return_4_7_calls,
+            state->worker_progress_return_8_plus_calls);
     if (output == stdout) {
         fflush(output);
     } else {
