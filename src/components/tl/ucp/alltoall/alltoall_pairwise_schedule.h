@@ -8,6 +8,7 @@
 #define ALLTOALL_PAIRWISE_SCHEDULE_H_
 
 #include "utils/ucc_coll_utils.h"
+#include "utils/ucc_malloc.h"
 #include <stdint.h>
 #include <string.h>
 #include <limits.h>
