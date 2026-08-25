@@ -28,7 +28,7 @@ ucc_tl_ucp_alltoall_topo_ring_build_map(const ucc_ep_map_t *node_maps,
     ucc_rank_t label, local_rank, node, rank;
 
     if (!node_maps || !rank_order || !rank_labels || nnodes <= 1 || ppn <= 1 ||
-        size != nnodes * ppn) {
+        size / nnodes != ppn || size % nnodes != 0) {
         return UCC_ERR_INVALID_PARAM;
     }
 

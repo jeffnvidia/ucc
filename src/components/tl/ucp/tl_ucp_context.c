@@ -323,9 +323,7 @@ UCC_CLASS_INIT_FUNC(ucc_tl_ucp_context_t,
                              lib->cfg.use_topo == UCC_AUTO) &&
                             (self->super.super.ucc_context->params.mask &
                              UCC_CONTEXT_PARAM_FIELD_OOB)) ||
-                           lib->cfg.use_topo == UCC_YES ||
-                           lib->cfg.alltoall_pairwise_schedule ==
-                               UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY)
+                           lib->cfg.use_topo == UCC_YES)
                               ? 1
                               : 0;
 

@@ -32,9 +32,7 @@ static inline ucc_rank_t
 get_peer(const ucc_tl_ucp_team_t *team, ucc_rank_t rank, ucc_rank_t size,
          ucc_rank_t step, int is_send)
 {
-    if (team->cfg.alltoall_pairwise_schedule ==
-            UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY &&
-        team->alltoall_topo_ring.enabled) {
+    if (team->alltoall_topo_ring.enabled) {
         return ucc_tl_ucp_alltoall_topo_ring_peer(
             team->alltoall_topo_ring.rank_order,
             team->alltoall_topo_ring.rank_labels, rank, size, step, is_send);

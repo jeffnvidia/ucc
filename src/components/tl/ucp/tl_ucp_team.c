@@ -70,7 +70,8 @@ static void ucc_tl_ucp_init_alltoall_topo_ring(ucc_tl_ucp_team_t *team)
     size   = UCC_TL_TEAM_SIZE(team);
     nnodes = ucc_topo_nnodes(team->topo);
     ppn    = ucc_topo_min_ppn(team->topo);
-    if (nnodes <= 1 || ppn <= 1 || nnodes * ppn != size) {
+    if (nnodes <= 1 || ppn <= 1 || size / nnodes != ppn ||
+        size % nnodes != 0) {
         tl_debug(UCC_TL_UCP_TEAM_LIB(team),
                  "alltoall topology ring unavailable: invalid team geometry "
                  "size %u nnodes %u ppn %u; using ordinary ring",
