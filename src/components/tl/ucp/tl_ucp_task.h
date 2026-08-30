@@ -216,6 +216,9 @@ typedef struct ucc_tl_ucp_task {
             int                     phase;
         } alltoall_bruck;
         struct {
+            int use_node_interleaved;
+        } alltoall_pairwise;
+        struct {
             uint32_t                tokens;
             uint32_t                npolls;
         } alltoall_onesided;

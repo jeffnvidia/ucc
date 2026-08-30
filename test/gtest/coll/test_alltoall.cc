@@ -77,12 +77,26 @@ static ucc_tl_ucp_team_t *get_ucp_team(UccTeam_h team, int rank)
     return NULL;
 }
 
-const ucc_job_env_t topology_schedule_env = {
+const ucc_job_env_t node_interleaved_schedule_env = {
     {"UCC_CLS", "basic"},
     {"UCC_TLS", "ucp"},
     {"UCC_CL_BASIC_TUNE", "inf"},
     {"UCC_TL_UCP_TUNE", "alltoall:0-inf:@pairwise"},
-    {"UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE", "ring_topology"}};
+    {"UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE", "ring_node_interleaved"}};
+
+const ucc_job_env_t auto_schedule_env = {
+    {"UCC_CLS", "basic"},
+    {"UCC_TLS", "ucp"},
+    {"UCC_CL_BASIC_TUNE", "inf"},
+    {"UCC_TL_UCP_TUNE", "alltoall:0-inf:@pairwise"},
+    {"UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE", "auto"}};
+
+const ucc_job_env_t ring_schedule_env = {
+    {"UCC_CLS", "basic"},
+    {"UCC_TLS", "ucp"},
+    {"UCC_CL_BASIC_TUNE", "inf"},
+    {"UCC_TL_UCP_TUNE", "alltoall:0-inf:@pairwise"},
+    {"UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE", "ring"}};
 
 } // namespace
 
@@ -266,6 +280,8 @@ public:
 
     void check_topology_schedule(UccJob::ucc_job_ctx_mode_t ctx_mode,
                                  int nprocs, bool expected_enabled,
+                                 ucc_tl_ucp_alltoall_pairwise_schedule_t
+                                     expected_schedule,
                                  const std::vector<ucc_rank_t> &expected_order)
     {
         UccJob        job(nprocs, ctx_mode, ucc_job_env_t(),
@@ -278,25 +294,29 @@ public:
 
             ASSERT_NE(nullptr, tl_team);
             EXPECT_EQ(expected_enabled,
-                      !!tl_team->alltoall_topo_ring.enabled);
-            EXPECT_EQ(
-                UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY,
-                tl_team->cfg.alltoall_pairwise_schedule);
+                      !!tl_team->alltoall_node_interleaved.available);
+            EXPECT_EQ(expected_schedule,
+                      tl_team->cfg.alltoall_pairwise_schedule);
             if (expected_enabled) {
                 ASSERT_EQ((size_t)nprocs, expected_order.size());
-                ASSERT_NE(nullptr, tl_team->alltoall_topo_ring.rank_order);
-                ASSERT_NE(nullptr, tl_team->alltoall_topo_ring.rank_labels);
+                ASSERT_NE(nullptr,
+                          tl_team->alltoall_node_interleaved.rank_order);
+                ASSERT_NE(nullptr,
+                          tl_team->alltoall_node_interleaved.rank_labels);
                 for (ucc_rank_t label = 0; label < (ucc_rank_t)nprocs;
                      label++) {
                     EXPECT_EQ(expected_order[label],
-                              tl_team->alltoall_topo_ring.rank_order[label]);
+                              tl_team->alltoall_node_interleaved
+                                  .rank_order[label]);
                     EXPECT_EQ(label,
-                              tl_team->alltoall_topo_ring.rank_labels[
+                              tl_team->alltoall_node_interleaved.rank_labels[
                                   expected_order[label]]);
                 }
             } else {
-                EXPECT_EQ(nullptr, tl_team->alltoall_topo_ring.rank_order);
-                EXPECT_EQ(nullptr, tl_team->alltoall_topo_ring.rank_labels);
+                EXPECT_EQ(nullptr,
+                          tl_team->alltoall_node_interleaved.rank_order);
+                EXPECT_EQ(nullptr,
+                          tl_team->alltoall_node_interleaved.rank_labels);
             }
         }
 
@@ -321,24 +341,47 @@ public:
 
 UCC_TEST_F(test_alltoall, topology_schedule_uniform_topology)
 {
-    ScopedEnvironment env(topology_schedule_env);
+    ScopedEnvironment env(node_interleaved_schedule_env);
 
-    check_topology_schedule(UccJob::UCC_JOB_CTX_GLOBAL, 8, true,
-                            {0, 4, 1, 5, 2, 6, 3, 7});
+    check_topology_schedule(
+        UccJob::UCC_JOB_CTX_GLOBAL, 8, true,
+        UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_NODE_INTERLEAVED,
+        {0, 4, 1, 5, 2, 6, 3, 7});
 }
 
 UCC_TEST_F(test_alltoall, topology_schedule_uneven_ppn_fallback)
 {
-    ScopedEnvironment env(topology_schedule_env);
+    ScopedEnvironment env(node_interleaved_schedule_env);
 
-    check_topology_schedule(UccJob::UCC_JOB_CTX_GLOBAL, 11, false, {});
+    check_topology_schedule(
+        UccJob::UCC_JOB_CTX_GLOBAL, 11, false,
+        UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_NODE_INTERLEAVED, {});
 }
 
 UCC_TEST_F(test_alltoall, topology_schedule_no_context_topology_fallback)
 {
-    ScopedEnvironment env(topology_schedule_env);
+    ScopedEnvironment env(node_interleaved_schedule_env);
 
-    check_topology_schedule(UccJob::UCC_JOB_CTX_LOCAL, 8, false, {});
+    check_topology_schedule(
+        UccJob::UCC_JOB_CTX_LOCAL, 8, false,
+        UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_NODE_INTERLEAVED, {});
+}
+
+UCC_TEST_F(test_alltoall, topology_schedule_auto_prepares_uniform_topology)
+{
+    ScopedEnvironment env(auto_schedule_env);
+
+    check_topology_schedule(UccJob::UCC_JOB_CTX_GLOBAL, 8, true,
+                            UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_AUTO,
+                            {0, 4, 1, 5, 2, 6, 3, 7});
+}
+
+UCC_TEST_F(test_alltoall, topology_schedule_forced_ring_skips_topology)
+{
+    ScopedEnvironment env(ring_schedule_env);
+
+    check_topology_schedule(UccJob::UCC_JOB_CTX_GLOBAL, 8, false,
+                            UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING, {});
 }
 
 class test_alltoall_0 : public test_alltoall,

@@ -9,6 +9,23 @@
 
 #include "utils/ucc_coll_utils.h"
 
+#define UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MIN_TEAM_SIZE 8
+#define UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MAX_TEAM_SIZE 32
+#define UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MIN_PEER_SIZE \
+    ((size_t)16 * 1024 * 1024)
+
+static inline int
+ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
+    ucc_rank_t size, size_t peer_size, ucc_memory_type_t src_mem_type,
+    ucc_memory_type_t dst_mem_type)
+{
+    return size >= UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MIN_TEAM_SIZE &&
+           size <= UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MAX_TEAM_SIZE &&
+           peer_size >= UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MIN_PEER_SIZE &&
+           src_mem_type == UCC_MEMORY_TYPE_CUDA &&
+           dst_mem_type == UCC_MEMORY_TYPE_CUDA;
+}
+
 /*
  * Convert node endpoint maps into a node-interleaved ring order.
  *
@@ -19,11 +36,9 @@
  * rather than depend on a materialized rank_map.
  */
 static inline ucc_status_t
-ucc_tl_ucp_alltoall_topo_ring_build_map(const ucc_ep_map_t *node_maps,
-                                        ucc_rank_t size, ucc_rank_t nnodes,
-                                        ucc_rank_t ppn,
-                                        ucc_rank_t *rank_order,
-                                        ucc_rank_t *rank_labels)
+ucc_tl_ucp_alltoall_node_interleaved_build_map(
+    const ucc_ep_map_t *node_maps, ucc_rank_t size, ucc_rank_t nnodes,
+    ucc_rank_t ppn, ucc_rank_t *rank_order, ucc_rank_t *rank_labels)
 {
     ucc_rank_t label, local_rank, node, rank;
 
@@ -55,10 +70,10 @@ ucc_tl_ucp_alltoall_topo_ring_build_map(const ucc_ep_map_t *node_maps,
 }
 
 static inline ucc_rank_t
-ucc_tl_ucp_alltoall_topo_ring_peer(const ucc_rank_t *rank_order,
-                                   const ucc_rank_t *rank_labels,
-                                   ucc_rank_t rank, ucc_rank_t size,
-                                   ucc_rank_t step, int is_send)
+ucc_tl_ucp_alltoall_node_interleaved_peer(const ucc_rank_t *rank_order,
+                                          const ucc_rank_t *rank_labels,
+                                          ucc_rank_t rank, ucc_rank_t size,
+                                          ucc_rank_t step, int is_send)
 {
     ucc_rank_t label = rank_labels[rank];
     ucc_rank_t peer_label;

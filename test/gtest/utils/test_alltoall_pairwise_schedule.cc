@@ -21,7 +21,7 @@ TEST(alltoall_pairwise_schedule, block_mapping)
         node_maps[node].strided.start   = node * 4;
         node_maps[node].strided.stride  = 1;
     }
-    EXPECT_EQ(UCC_OK, ucc_tl_ucp_alltoall_topo_ring_build_map(
+    EXPECT_EQ(UCC_OK, ucc_tl_ucp_alltoall_node_interleaved_build_map(
                           node_maps, 8, 2, 4, rank_order, rank_labels));
     for (ucc_rank_t i = 0; i < 8; i++) {
         EXPECT_EQ(expected[i], rank_order[i]);
@@ -42,7 +42,7 @@ TEST(alltoall_pairwise_schedule, reordered_team_mapping)
         node_maps[node].array.map       = (void *)&node_ranks[node * 2];
         node_maps[node].array.elem_size = sizeof(ucc_rank_t);
     }
-    EXPECT_EQ(UCC_OK, ucc_tl_ucp_alltoall_topo_ring_build_map(
+    EXPECT_EQ(UCC_OK, ucc_tl_ucp_alltoall_node_interleaved_build_map(
                           node_maps, 8, 4, 2, rank_order, rank_labels));
     for (ucc_rank_t i = 0; i < 8; i++) {
         EXPECT_EQ(expected[i], rank_order[i]);
@@ -66,25 +66,25 @@ TEST(alltoall_pairwise_schedule, rejects_invalid_geometry_and_maps)
     maps[0].array.map = (void *)&valid[0];
     maps[1].array.map = (void *)&valid[2];
     EXPECT_EQ(UCC_ERR_INVALID_PARAM,
-              ucc_tl_ucp_alltoall_topo_ring_build_map(
+              ucc_tl_ucp_alltoall_node_interleaved_build_map(
                   maps, 4, 1, 4, rank_order, rank_labels));
     EXPECT_EQ(UCC_ERR_INVALID_PARAM,
-              ucc_tl_ucp_alltoall_topo_ring_build_map(
+              ucc_tl_ucp_alltoall_node_interleaved_build_map(
                   maps, 4, 2, 3, rank_order, rank_labels));
     maps[1].ep_num = 1;
     EXPECT_EQ(UCC_ERR_INVALID_PARAM,
-              ucc_tl_ucp_alltoall_topo_ring_build_map(
+              ucc_tl_ucp_alltoall_node_interleaved_build_map(
                   maps, 4, 2, 2, rank_order, rank_labels));
     maps[1].ep_num = 2;
     maps[0].array.map = (void *)&duplicate[0];
     maps[1].array.map = (void *)&duplicate[2];
     EXPECT_EQ(UCC_ERR_INVALID_PARAM,
-              ucc_tl_ucp_alltoall_topo_ring_build_map(
+              ucc_tl_ucp_alltoall_node_interleaved_build_map(
                   maps, 4, 2, 2, rank_order, rank_labels));
     maps[0].array.map = (void *)&out_of_range[0];
     maps[1].array.map = (void *)&out_of_range[2];
     EXPECT_EQ(UCC_ERR_INVALID_PARAM,
-              ucc_tl_ucp_alltoall_topo_ring_build_map(
+              ucc_tl_ucp_alltoall_node_interleaved_build_map(
                   maps, 4, 2, 2, rank_order, rank_labels));
 }
 
@@ -107,7 +107,7 @@ TEST(alltoall_pairwise_schedule, every_peer_and_reciprocal_receive)
                 node_maps[node].array.map       = &node_ranks[node * ppn];
                 node_maps[node].array.elem_size = sizeof(ucc_rank_t);
             }
-            ASSERT_EQ(UCC_OK, ucc_tl_ucp_alltoall_topo_ring_build_map(
+            ASSERT_EQ(UCC_OK, ucc_tl_ucp_alltoall_node_interleaved_build_map(
                                   node_maps.data(), size, nnodes, ppn,
                                   rank_order.data(), rank_labels.data()));
 
@@ -115,11 +115,11 @@ TEST(alltoall_pairwise_schedule, every_peer_and_reciprocal_receive)
                 std::vector<int> seen(size, 0);
                 for (ucc_rank_t step = 0; step < size; step++) {
                     ucc_rank_t send_peer =
-                        ucc_tl_ucp_alltoall_topo_ring_peer(
+                        ucc_tl_ucp_alltoall_node_interleaved_peer(
                             rank_order.data(), rank_labels.data(), rank, size,
                             step, 1);
                     ucc_rank_t reciprocal =
-                        ucc_tl_ucp_alltoall_topo_ring_peer(
+                        ucc_tl_ucp_alltoall_node_interleaved_peer(
                             rank_order.data(), rank_labels.data(), send_peer,
                             size, step, 0);
 
@@ -130,4 +130,28 @@ TEST(alltoall_pairwise_schedule, every_peer_and_reciprocal_receive)
             }
         }
     }
+}
+
+TEST(alltoall_pairwise_schedule, automatic_selection_boundaries)
+{
+    const size_t min_peer_size =
+        UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MIN_PEER_SIZE;
+
+    EXPECT_FALSE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
+        7, min_peer_size, UCC_MEMORY_TYPE_CUDA, UCC_MEMORY_TYPE_CUDA));
+    EXPECT_TRUE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
+        8, min_peer_size, UCC_MEMORY_TYPE_CUDA, UCC_MEMORY_TYPE_CUDA));
+    EXPECT_FALSE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
+        32, min_peer_size - 1, UCC_MEMORY_TYPE_CUDA, UCC_MEMORY_TYPE_CUDA));
+    EXPECT_TRUE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
+        32, min_peer_size, UCC_MEMORY_TYPE_CUDA, UCC_MEMORY_TYPE_CUDA));
+    EXPECT_FALSE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
+        33, min_peer_size, UCC_MEMORY_TYPE_CUDA, UCC_MEMORY_TYPE_CUDA));
+    EXPECT_FALSE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
+        16, min_peer_size, UCC_MEMORY_TYPE_HOST, UCC_MEMORY_TYPE_HOST));
+    EXPECT_FALSE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
+        16, min_peer_size, UCC_MEMORY_TYPE_CUDA, UCC_MEMORY_TYPE_HOST));
+    EXPECT_FALSE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
+        16, min_peer_size, UCC_MEMORY_TYPE_CUDA_MANAGED,
+        UCC_MEMORY_TYPE_CUDA_MANAGED));
 }

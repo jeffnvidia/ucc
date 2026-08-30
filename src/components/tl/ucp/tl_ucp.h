@@ -44,8 +44,9 @@ typedef struct ucc_tl_ucp_iface {
 extern ucc_tl_ucp_iface_t ucc_tl_ucp;
 
 typedef enum {
+    UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_AUTO,
     UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING,
-    UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_TOPOLOGY,
+    UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_NODE_INTERLEAVED,
     UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_LAST
 } ucc_tl_ucp_alltoall_pairwise_schedule_t;
 
@@ -172,11 +173,11 @@ typedef ucc_status_t (*ucc_tl_ucp_copy_test_fn_t)(ucc_tl_ucp_context_t *ctx,
                                                   ucc_tl_ucp_copy_task_t *copy_task);
 typedef ucc_status_t (*ucc_tl_ucp_copy_finalize_fn_t)(ucc_tl_ucp_copy_task_t *copy_task);
 
-typedef struct ucc_tl_ucp_alltoall_topo_ring {
+typedef struct ucc_tl_ucp_alltoall_node_interleaved {
     ucc_rank_t *rank_order;
     ucc_rank_t *rank_labels;
-    int         enabled;
-} ucc_tl_ucp_alltoall_topo_ring_t;
+    int         available;
+} ucc_tl_ucp_alltoall_node_interleaved_t;
 
 typedef struct ucc_tl_ucp_team {
     ucc_tl_team_t              super;
@@ -190,7 +191,7 @@ typedef struct ucc_tl_ucp_team {
     const char *               tuning_str;
     ucc_topo_t                *topo;
     ucc_ep_map_t               ctx_map;
-    ucc_tl_ucp_alltoall_topo_ring_t alltoall_topo_ring;
+    ucc_tl_ucp_alltoall_node_interleaved_t alltoall_node_interleaved;
     ucc_rank_t                 opt_radix; /* generic opt radix */
     ucc_rank_t                 opt_radix_host; /* host specific opt radix */
     ucc_ring_pattern_t         *cuda_ring;
