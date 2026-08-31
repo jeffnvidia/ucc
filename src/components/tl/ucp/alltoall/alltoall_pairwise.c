@@ -134,7 +134,7 @@ ucc_status_t ucc_tl_ucp_alltoall_pairwise_init_common(ucc_tl_ucp_task_t *task)
 {
     ucc_tl_ucp_team_t *team = TASK_TEAM(task);
     ucc_coll_args_t   *args = &TASK_ARGS(task);
-    size_t             data_size;
+    size_t data_size;
 
     task->super.post     = ucc_tl_ucp_alltoall_pairwise_start;
     task->super.progress = ucc_tl_ucp_alltoall_pairwise_progress;
