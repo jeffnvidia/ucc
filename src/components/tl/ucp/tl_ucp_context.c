@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *
  * See file LICENSE for terms.
  */
@@ -323,9 +323,7 @@ UCC_CLASS_INIT_FUNC(ucc_tl_ucp_context_t,
                              lib->cfg.use_topo == UCC_AUTO) &&
                             (self->super.super.ucc_context->params.mask &
                              UCC_CONTEXT_PARAM_FIELD_OOB)) ||
-                           lib->cfg.use_topo == UCC_YES)
-                              ? 1
-                              : 0;
+                           lib->cfg.use_topo == UCC_YES) ? 1 : 0;
 
     ucc_status = ucc_mpool_init(
         &self->req_mp, 0,
