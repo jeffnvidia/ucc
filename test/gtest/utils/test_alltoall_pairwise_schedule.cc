@@ -131,27 +131,3 @@ TEST(alltoall_pairwise_schedule, every_peer_and_reciprocal_receive)
         }
     }
 }
-
-TEST(alltoall_pairwise_schedule, automatic_selection_boundaries)
-{
-    const size_t min_peer_size =
-        UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MIN_PEER_SIZE;
-
-    EXPECT_FALSE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
-        7, min_peer_size, UCC_MEMORY_TYPE_CUDA, UCC_MEMORY_TYPE_CUDA));
-    EXPECT_TRUE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
-        8, min_peer_size, UCC_MEMORY_TYPE_CUDA, UCC_MEMORY_TYPE_CUDA));
-    EXPECT_FALSE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
-        32, min_peer_size - 1, UCC_MEMORY_TYPE_CUDA, UCC_MEMORY_TYPE_CUDA));
-    EXPECT_TRUE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
-        32, min_peer_size, UCC_MEMORY_TYPE_CUDA, UCC_MEMORY_TYPE_CUDA));
-    EXPECT_FALSE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
-        33, min_peer_size, UCC_MEMORY_TYPE_CUDA, UCC_MEMORY_TYPE_CUDA));
-    EXPECT_FALSE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
-        16, min_peer_size, UCC_MEMORY_TYPE_HOST, UCC_MEMORY_TYPE_HOST));
-    EXPECT_FALSE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
-        16, min_peer_size, UCC_MEMORY_TYPE_CUDA, UCC_MEMORY_TYPE_HOST));
-    EXPECT_FALSE(ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
-        16, min_peer_size, UCC_MEMORY_TYPE_CUDA_MANAGED,
-        UCC_MEMORY_TYPE_CUDA_MANAGED));
-}

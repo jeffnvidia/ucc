@@ -84,13 +84,6 @@ const ucc_job_env_t node_interleaved_schedule_env = {
     {"UCC_TL_UCP_TUNE", "alltoall:0-inf:@pairwise"},
     {"UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE", "ring_node_interleaved"}};
 
-const ucc_job_env_t auto_schedule_env = {
-    {"UCC_CLS", "basic"},
-    {"UCC_TLS", "ucp"},
-    {"UCC_CL_BASIC_TUNE", "inf"},
-    {"UCC_TL_UCP_TUNE", "alltoall:0-inf:@pairwise"},
-    {"UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE", "auto"}};
-
 const ucc_job_env_t ring_schedule_env = {
     {"UCC_CLS", "basic"},
     {"UCC_TLS", "ucp"},
@@ -365,15 +358,6 @@ UCC_TEST_F(test_alltoall, topology_schedule_no_context_topology_fallback)
     check_topology_schedule(
         UccJob::UCC_JOB_CTX_LOCAL, 8, false,
         UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_NODE_INTERLEAVED, {});
-}
-
-UCC_TEST_F(test_alltoall, topology_schedule_auto_prepares_uniform_topology)
-{
-    ScopedEnvironment env(auto_schedule_env);
-
-    check_topology_schedule(UccJob::UCC_JOB_CTX_GLOBAL, 8, true,
-                            UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_AUTO,
-                            {0, 4, 1, 5, 2, 6, 3, 7});
 }
 
 UCC_TEST_F(test_alltoall, topology_schedule_forced_ring_skips_topology)

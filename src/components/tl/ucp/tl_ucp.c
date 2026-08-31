@@ -32,7 +32,6 @@ const char *ucc_tl_ucp_alltoall_onesided_names[] = {
 };
 
 static const char *alltoall_pairwise_schedules[] = {
-    [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_AUTO] = "auto",
     [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING] = "ring",
     [UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_NODE_INTERLEAVED] =
         "ring_node_interleaved",
@@ -72,10 +71,8 @@ ucc_config_field_t ucc_tl_ucp_lib_config_table[] = {
      ucc_offsetof(ucc_tl_ucp_lib_config_t, alltoall_pairwise_num_posts),
      UCC_CONFIG_TYPE_ULUNITS},
 
-    {"ALLTOALL_PAIRWISE_SCHEDULE", "auto",
+    {"ALLTOALL_PAIRWISE_SCHEDULE", "ring",
      "Peer ordering for alltoall pairwise algorithm\n"
-     "auto                  - node-interleaved ring for selected CUDA "
-     "operations\n"
      "ring                  - directed ring over team ranks\n"
      "ring_node_interleaved - directed ring over node-interleaved rank "
      "labels",

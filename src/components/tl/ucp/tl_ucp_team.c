@@ -55,13 +55,8 @@ static void ucc_tl_ucp_init_alltoall_node_interleaved(ucc_tl_ucp_team_t *team)
     ucc_status_t status;
     int          n_nodes;
 
-    size = UCC_TL_TEAM_SIZE(team);
-    if (team->cfg.alltoall_pairwise_schedule ==
-            UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING ||
-        (team->cfg.alltoall_pairwise_schedule ==
-             UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_AUTO &&
-         (size < UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MIN_TEAM_SIZE ||
-          size > UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MAX_TEAM_SIZE))) {
+    if (team->cfg.alltoall_pairwise_schedule !=
+        UCC_TL_UCP_ALLTOALL_PAIRWISE_SCHEDULE_RING_NODE_INTERLEAVED) {
         return;
     }
     if (!team->topo || ucc_topo_is_single_node(team->topo) ||
@@ -73,6 +68,7 @@ static void ucc_tl_ucp_init_alltoall_node_interleaved(ucc_tl_ucp_team_t *team)
         return;
     }
 
+    size   = UCC_TL_TEAM_SIZE(team);
     nnodes = ucc_topo_nnodes(team->topo);
     ppn    = ucc_topo_min_ppn(team->topo);
     if (nnodes <= 1 || ppn <= 1 || size / nnodes != ppn ||

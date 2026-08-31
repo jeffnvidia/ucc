@@ -9,23 +9,6 @@
 
 #include "utils/ucc_coll_utils.h"
 
-#define UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MIN_TEAM_SIZE 8
-#define UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MAX_TEAM_SIZE 32
-#define UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MIN_PEER_SIZE \
-    ((size_t)16 * 1024 * 1024)
-
-static inline int
-ucc_tl_ucp_alltoall_auto_uses_node_interleaved(
-    ucc_rank_t size, size_t peer_size, ucc_memory_type_t src_mem_type,
-    ucc_memory_type_t dst_mem_type)
-{
-    return size >= UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MIN_TEAM_SIZE &&
-           size <= UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MAX_TEAM_SIZE &&
-           peer_size >= UCC_TL_UCP_ALLTOALL_NODE_INTERLEAVED_MIN_PEER_SIZE &&
-           src_mem_type == UCC_MEMORY_TYPE_CUDA &&
-           dst_mem_type == UCC_MEMORY_TYPE_CUDA;
-}
-
 /*
  * Convert node endpoint maps into a node-interleaved ring order.
  *
