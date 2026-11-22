@@ -151,10 +151,10 @@ typedef struct ucc_tl_ucp_task ucc_tl_ucp_task_t;
 typedef struct ucc_tl_ucp_context ucc_tl_ucp_context_t;
 typedef union ucc_tl_ucp_copy_task ucc_tl_ucp_copy_task_t;
 
-typedef struct ucc_tl_ucp_allgather_kn_seq_storage {
+typedef struct ucc_tl_ucp_kn_seq_storage {
     ucc_kn_radix_seq_t seq;
     ucc_kn_radix_t     radices[UCC_KN_MAX_RADIX_PHASES];
-} ucc_tl_ucp_allgather_kn_seq_storage_t;
+} ucc_tl_ucp_kn_seq_storage_t;
 
 typedef ucc_status_t (*ucc_tl_ucp_copy_post_fn_t)(void *dst,
                                                   ucc_memory_type_t dst_mtype,
@@ -170,22 +170,22 @@ typedef ucc_status_t (*ucc_tl_ucp_copy_test_fn_t)(ucc_tl_ucp_context_t *ctx,
 typedef ucc_status_t (*ucc_tl_ucp_copy_finalize_fn_t)(ucc_tl_ucp_copy_task_t *copy_task);
 
 typedef struct ucc_tl_ucp_team {
-    ucc_tl_team_t              super;
-    ucc_status_t               status;
-    uint32_t                   seq_num;
-    ucc_tl_ucp_task_t         *preconnect_task;
-    void *                     va_base[MAX_NR_SEGMENTS];
-    size_t                     base_length[MAX_NR_SEGMENTS];
-    ucc_tl_ucp_worker_t *      worker;
-    ucc_tl_ucp_team_config_t   cfg;
-    const char *               tuning_str;
-    ucc_topo_t                *topo;
-    ucc_ep_map_t               ctx_map;
-    ucc_rank_t                 opt_radix; /* generic opt radix */
-    ucc_rank_t                 opt_radix_host; /* host specific opt radix */
+    ucc_tl_team_t               super;
+    ucc_status_t                status;
+    uint32_t                    seq_num;
+    ucc_tl_ucp_task_t          *preconnect_task;
+    void                       *va_base[MAX_NR_SEGMENTS];
+    size_t                      base_length[MAX_NR_SEGMENTS];
+    ucc_tl_ucp_worker_t        *worker;
+    ucc_tl_ucp_team_config_t    cfg;
+    const char                 *tuning_str;
+    ucc_topo_t                 *topo;
+    ucc_ep_map_t                ctx_map;
+    ucc_rank_t                  opt_radix;      /* generic opt radix */
+    ucc_rank_t                  opt_radix_host; /* host specific opt radix */
     ucc_ring_pattern_t         *cuda_ring;
-    ucc_tl_ucp_allgather_kn_seq_storage_t allgather_kn_auto_small;
-    ucc_tl_ucp_allgather_kn_seq_storage_t allgather_kn_auto_large;
+    ucc_tl_ucp_kn_seq_storage_t allgather_kn_auto_small;
+    ucc_tl_ucp_kn_seq_storage_t allgather_kn_auto_large;
 } ucc_tl_ucp_team_t;
 UCC_CLASS_DECLARE(ucc_tl_ucp_team_t, ucc_base_context_t *,
                   const ucc_base_team_params_t *);

@@ -112,16 +112,23 @@ UCC_CLASS_INIT_FUNC(ucc_tl_ucp_team_t, ucc_base_context_t *tl_context,
         }
     }
 
-    ucc_tl_ucp_allgather_knomial_select_radix_seq(
+    status = ucc_tl_ucp_allgather_knomial_select_radix_seq(
         UCC_TL_TEAM_SIZE(self),
         0,
         self->allgather_kn_auto_small.radices,
         &self->allgather_kn_auto_small.seq);
-    ucc_tl_ucp_allgather_knomial_select_radix_seq(
+    /* An unavailable exact sequence leaves the legacy auto choice in place. */
+    if (status != UCC_OK && status != UCC_ERR_NOT_SUPPORTED) {
+        return status;
+    }
+    status = ucc_tl_ucp_allgather_knomial_select_radix_seq(
         UCC_TL_TEAM_SIZE(self),
         UCC_TL_UCP_ALLGATHER_KN_LARGE_MSG_SIZE,
         self->allgather_kn_auto_large.radices,
         &self->allgather_kn_auto_large.seq);
+    if (status != UCC_OK && status != UCC_ERR_NOT_SUPPORTED) {
+        return status;
+    }
 
     if (!self->topo && self->cfg.use_reordering) {
         tl_debug(tl_context->lib,

@@ -78,7 +78,7 @@ static int ucc_tl_ucp_allgather_knomial_factor_large_msg(
     return remaining == 1;
 }
 
-int ucc_tl_ucp_allgather_knomial_select_radix_seq(
+ucc_status_t ucc_tl_ucp_allgather_knomial_select_radix_seq(
     ucc_rank_t team_size, size_t msg_size, ucc_kn_radix_t *radices,
     ucc_kn_radix_seq_t *radix_seq)
 {
@@ -87,17 +87,14 @@ int ucc_tl_ucp_allgather_knomial_select_radix_seq(
     uint8_t        nphases;
     uint8_t        i;
 
-    *radix_seq = (ucc_kn_radix_seq_t){0};
-    if (team_size < 2) {
-        return 0;
-    }
+    *radix_seq         = (ucc_kn_radix_seq_t){0};
 
     radix_seq->radices = radices;
     if (msg_size >= UCC_TL_UCP_ALLGATHER_KN_LARGE_MSG_SIZE) {
         if (!ucc_tl_ucp_allgather_knomial_factor_large_msg(
                 team_size, radices, &radix_seq->n_radices)) {
             *radix_seq = (ucc_kn_radix_seq_t){0};
-            return 0;
+            return UCC_ERR_NOT_SUPPORTED;
         }
     } else {
         for (nphases = ucc_tl_ucp_allgather_knomial_min_phases(team_size);
@@ -113,15 +110,15 @@ int ucc_tl_ucp_allgather_knomial_select_radix_seq(
         }
         if (radix_seq->n_radices == 0) {
             *radix_seq = (ucc_kn_radix_seq_t){0};
-            return 0;
+            return UCC_ERR_NOT_SUPPORTED;
         }
     }
 
     for (i = 1; i < radix_seq->n_radices; i++) {
         if (radices[i] != radices[0]) {
-            return 1;
+            return UCC_OK;
         }
     }
     *radix_seq = ucc_kn_radix_seq_from_radix(radices[0]);
-    return 1;
+    return UCC_OK;
 }
